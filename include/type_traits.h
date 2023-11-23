@@ -51,9 +51,9 @@ template <typename...>
 using expand_to_true = true_type;
 //every Pred::value has to be true.
 template <typename... Pred>
-expand_to_true<enable_if<Pred::value>...> and_helper();
+expand_to_true<enable_if<Pred::value>...> and_helper(int);
 template <typename...>
-false_type and_helper();
+false_type and_helper(...);
 
 template <typename... Pred>
 using And = decltype(and_helper<Pred...>());
@@ -111,6 +111,9 @@ struct remove_reference<T&> {typedef T type;};
 template <typename T>
 struct remove_reference<T&&> {typedef T type;};
 
+template <typename T>
+using remove_reference_t = typename remove_reference<T>::type;
+
 //remove CV specifier
 template <typename T>
 struct remove_cv {typedef T type;};
@@ -129,6 +132,8 @@ template <typename T>
 struct remove_cv_ref {
     typedef typename remove_cv<typename remove_reference<T>::type>::type type;
 };
+template <typename T>
+using remove_cv_ref_t = typename remove_cv<T>::type;
 
 //remove_extents
 template <typename T>
@@ -280,9 +285,9 @@ struct is_pointer: false_type {};
 template <typename T>
 struct is_pointer<T*>: true_type {};
 
-//is_member_pointer
+// -------- is_member_pointer ---------------------
 template <typename>
-struct is_member_pointer {
+struct libevo_is_member_pointer {
     enum {
         is_member = false,
         is_func = false,
@@ -291,7 +296,7 @@ struct is_member_pointer {
 };
 
 template <typename T, typename U>
-struct is_member_pointer<T U::*> {
+struct libevo_is_member_pointer<T U::*> {
     enum {
         is_member = true,
         is_func = is_function<T>::value,
@@ -299,13 +304,19 @@ struct is_member_pointer<T U::*> {
     };
 };
 
+template <typename T>
+struct is_member_pointer: 
+    bool_constant<libevo_is_member_pointer<remove_cv_t<T>>::is_member> {};
+
 //is_member_function_pointer
 template <typename T>
-struct is_member_function_pointer: bool_constant<is_member_pointer<typename remove_cv<T>::type>::is_func> {};
+struct is_member_function_pointer: 
+    bool_constant<libevo_is_member_pointer<remove_cv_t<T>>::is_func> {};
 
 //is_member_object_pointer
 template <typename T>
-struct is_member_object_pointer: bool_constant<is_member_pointer<typename remove_cv<T>::type>::is_obj> {};
+struct is_member_object_pointer: 
+    bool_constant<libevo_is_member_pointer<remove_cv_t<T>>::is_obj> {};
 
 //is arithmetic
 template <typename T>
@@ -409,6 +420,31 @@ template <typename T>
 struct is_trivially_destructible: trivial_destructor<typename remove_all_extents<T>::type> {};
 template <typename T>
 struct is_trivially_destructible<T[]>: false_type {};
+
+/// ----------- move -------------------
+template <typename T>
+inline typename remove_reference<T>::type&&
+move(T&& t) noexcept {
+    typedef typename remove_reference<T>::type U;
+    return static_cast<U&&>(t);
+}
+template <typename T>
+inline typename remove_reference<T>::type&&
+move(T& t) noexcept {
+    typedef typename remove_reference<T>::type U;
+    return static_cast<U&&>(t);
+}
+
+/// -------- forward ------------------
+template <typename T>
+inline T&& forward(typename remove_reference<T>::type& t) {
+    return static_cast<T&&>(t);
+}
+template <typename T>
+inline T&& forward(typename remove_reference<T>::type&& t) {
+    static_assert(!evo::is_lvalue_reference<T>::value, "cannot forward an rvalue as a lvalue");
+    return static_cast<T&&>(t);
+}
 
 //is_convertible
 //if convertible, the test function is valid.
