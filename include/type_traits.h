@@ -11,6 +11,8 @@
 
 #include "utility/declval.h"
 #include "types.h"
+#include <type_traits>
+#include <functional>
 
 namespace evo {
 
@@ -114,6 +116,18 @@ struct remove_reference<T&&> {typedef T type;};
 template <typename T>
 using remove_reference_t = typename remove_reference<T>::type;
 
+//remove const specifier
+template <typename T>
+struct remove_const {typedef T type;};
+template <typename T>
+struct remove_const<const T> {typedef T type;};
+
+//remove volatile specifier
+template <typename T>
+struct remove_volatile {typedef T type;};
+template <typename T>
+struct remove_volatile<volatile T> {typedef T type;};
+
 //remove CV specifier
 template <typename T>
 struct remove_cv {typedef T type;};
@@ -191,6 +205,10 @@ using all = is_same<all_helper<Pred...>, all_helper<((void)Pred, true)...>>;
 template <typename T>
 struct is_lvalue_reference: bool_constant<__is_lvalue_reference(T)> {};
 
+//is_rvalue_reference
+template <typename T>
+struct is_rvalue_reference: bool_constant<__is_rvalue_reference(T)> {};
+
 //make_integer_sequence
 template <size_t... values>
 struct integer_sequence {
@@ -259,6 +277,9 @@ template <typename>
 struct is_void: false_type {};
 template <>
 struct is_void<void>: true_type {};
+
+template <typename T>
+constexpr bool is_void_v = is_void<T>::value;
 
 //is_const
 template <typename>
@@ -698,26 +719,75 @@ inline constexpr bool libcpp_is_constant_evaluated() noexcept {
     return __builtin_is_constant_evaluated();
 }
 
-// INVOKE !!!
-// TODO: invoke_impl is not complete.
-template <typename T>
-struct invoke_impl {
-    template <typename F, typename... Args>
-    static auto call(F&& f, Args&&... args)
-        -> decltype(forward<F>(f)(forward<Args>(args)...));
+struct __any {
+    __any(...);
 };
 
+//// ------- INVOKE !!! ----------------
+//// TODO: invokable is much different than stl
+template <typename Ret, typename F, typename... Args>
+struct invokable {
+    struct nat;
+    
+    template <typename X, typename... XArgs>
+    static auto try_call(int) -> 
+        decltype(forward<X>(declval<X>())(forward<XArgs>(declval<XArgs>())...));
 
-template <typename F, typename... Args, typename Fd = typename decay<F>::type>
-auto INVOKE(F&& f, Args&&... args) -> decltype(invoke_impl<Fd>::call(forward<F>(f), forward<Args>(args)...));
+    template <typename X, typename... XArgs>
+    static nat try_call(...);
+    
+    using Result = decltype(try_call<F, Args...>(0));
 
+    using type = typename conditional<
+        is_same<Result, nat>::value,
+        false_type,
+        typename conditional<
+            is_void_v<Ret>,
+            true_type,
+            is_convertible<Ret, Result>
+            >::type
+        >::type;
+    static const bool value = type::value;
+};
 
-// result_of
-template <typename> class result_of;
 template <typename F, typename... Args>
-class result_of<F(Args...)> {
-    typedef decltype(INVOKE(declval<F>(), declval<Args>()...)) type;
-};
+struct invoke_of: public enable_if<
+    invokable<void, F, Args...>::value,
+    typename invokable<void, F, Args...>::Result
+> {};
+
+
+/// About how to invoke a member pointer
+template <typename>
+constexpr bool is_reference_wrapper_v = false;
+template <typename T>
+constexpr bool is_reference_wrapper_v<std::reference_wrapper<T>> = true;
+template <typename C, typename M, typename T, typename... Args>
+constexpr decltype(auto) invoke_memptr(M C::* method, T&& instance, Args... args) {
+    if constexpr (is_function<M>::value) {
+        if constexpr (std::is_base_of_v<C, typename decay<T>::type>) {
+            return (forward<T>(instance).*method)
+                (forward<Args>(args)...);
+        }
+        else if constexpr (is_reference_wrapper_v<typename decay<T>::type>) {
+            return (instance.get().*method)(forward<Args>(args)...);
+        }
+        else {
+            return ((*forward<T>(instance)).*method)(forward<Args>(args)...);
+        }
+    }
+}
+
+template <typename F, typename... Args>
+constexpr std::invoke_result_t<F, Args...>
+invoke(F&& f, Args&&... args) 
+noexcept(std::is_nothrow_invocable_v<F, Args...>){
+    if constexpr (is_member_pointer<F>::value) {
+        return invoke_memptr(f, forward<Args>(args)...);
+    } else {
+        return forward<F>(f)(forward<Args>(args)...);
+    }
+}
 
 } //namespace evo
 
