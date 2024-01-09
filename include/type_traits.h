@@ -47,6 +47,9 @@ struct is_same: false_type {};
 template <typename T>
 struct is_same<T, T>: true_type {};
 
+template <typename T, typename U>
+inline constexpr bool is_same_v = is_same<T, U>::value;
+
 //and helper
 //like multiple enable_if
 template <typename...>
@@ -272,6 +275,9 @@ struct is_array<T[]>: true_type {};
 template <size_t N, typename T>
 struct is_array<T[N]>: true_type {};
 
+template <typename T>
+inline constexpr bool is_array_v = is_array<T>::value;
+
 //is_void
 template <typename>
 struct is_void: false_type {};
@@ -294,6 +300,9 @@ template <typename T>
 struct is_reference<T&>: true_type {};
 template <typename T>
 struct is_reference<T&&>: true_type {};
+
+template <typename T>
+inline constexpr bool is_reference_v = is_reference<T>::value;
 
 //is_function
 //as function is not referenceable and cannot put const specifier on it.
@@ -367,6 +376,8 @@ struct is_object: bool_constant<
 #if __has_feature(is_constructible)
 template <typename T, typename... Args>
 struct is_constructible: bool_constant<__is_constructible(T, Args...)> {};
+template <typename T, typename... Args>
+inline constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
 
 //is_default_constructible
 template <typename T>
@@ -433,6 +444,16 @@ struct is_trivially_move_constructible: is_trivially_constructible<T, typename a
 #endif // #if __has_feature(is_constructible)
 
 
+#if __has_keyword(__is_destructible)
+
+template <typename T>
+using is_destructible = bool_constant<__is_destructible(T)>;
+
+template <typename T>
+using is_destructible_v = bool_constant<__is_destructible(T)>::value;
+
+#endif // #if __has_keyword(is_destructible)
+
 //is_trivially_destructible
 template <typename T>
 struct trivial_destructor: bool_constant<is_scalar<T>::value || is_reference<T>::value> {};
@@ -480,6 +501,10 @@ struct is_convertible_impl<From, To, decltype(is_convertible_test<To>(declval<Fr
 
 template <typename From, typename To>
 struct is_convertible: is_convertible_impl<From, To> {};
+
+template <typename From, typename To>
+inline constexpr bool is_convertible_v = is_convertible<From, To>::value;
+
 
 //is_assignable
 template <typename T, typename U>
@@ -788,6 +813,23 @@ noexcept(std::is_nothrow_invocable_v<F, Args...>){
         return forward<F>(f)(forward<Args>(args)...);
     }
 }
+
+// If trait, receive three parameters:
+// P: if true, returns type T, else return type U,
+// T,
+// U
+template <bool, typename, typename>
+struct If;
+
+template <typename T, typename U>
+struct If<true, T, U> {
+    typedef T type;
+};
+
+template <typename T, typename U>
+struct If<false, T, U> {
+    typedef U type;
+};
 
 } //namespace evo
 
