@@ -186,6 +186,9 @@ struct add_pointer {
     typedef typename add_pointer_impl<T>::type type;
 };
 
+template <typename T>
+using add_pointer_t = typename add_pointer<T>::type;
+
 //conditional
 template <bool b, typename If, typename Then>
 struct conditional {typedef If type;};
@@ -390,10 +393,14 @@ struct is_nothrow_constructible: public bool_constant<__is_nothrow_constructible
 //is_move_constructible
 template <typename T>
 struct is_move_constructible: public is_constructible<T, typename add_rvalue_reference<T>::type> {};
+template <typename T>
+constexpr bool is_move_constructible_v = is_move_constructible<T>::value;
 
 //is_copy_constructible
 template <typename T>
 struct is_copy_constructible: public is_constructible<T, typename add_lvalue_reference<typename add_const<T>::type>::type> {};
+template <typename T>
+constexpr bool is_copy_constructible_v = is_copy_constructible<T>::value;
 
 //is_nothrow_copy_constructible
 template <typename T>
@@ -408,6 +415,9 @@ template <typename T>
 struct is_nothrow_move_constructible: public is_nothrow_constructible<
                                       typename add_lvalue_reference<T>::type,
                                       typename add_rvalue_reference<T>::type> {};
+
+template <typename T>
+constexpr bool is_nothrow_move_constructible_v = is_nothrow_move_constructible<T>::value;
 
 //is_implicitly_default_constructible
 template <typename T>
@@ -819,17 +829,20 @@ noexcept(std::is_nothrow_invocable_v<F, Args...>){
 // T,
 // U
 template <bool, typename, typename>
-struct If;
+struct IfImpl;
 
 template <typename T, typename U>
-struct If<true, T, U> {
+struct IfImpl<true, T, U> {
     typedef T type;
 };
 
 template <typename T, typename U>
-struct If<false, T, U> {
+struct IfImpl<false, T, U> {
     typedef U type;
 };
+
+template <bool p, typename T, typename U>
+using If = typename IfImpl<p, T, U>::type;
 
 } //namespace evo
 
