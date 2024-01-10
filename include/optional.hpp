@@ -11,6 +11,8 @@
 #include <cassert>
 #include <functional>
 #include <initializer_list>
+#include <iostream>
+#include "debug.h"
 
 namespace evo {
 
@@ -130,6 +132,7 @@ struct optional_storage_base: optional_desctruct_base<T> {
 
     template <typename... Args>
     void construct(Args&&... args) {
+        std::cout << "sizeof... Args: "<< sizeof...(Args) << std::endl;
         assert(!this->has_value());
         new(&(this->val)) value_type(forward<Args>(args)...);
         this->is_engaged = true;
@@ -219,6 +222,8 @@ struct optional_copy_assign_base: optional_move_base<T> {
 
 template <typename T>
 struct optional_copy_assign_base<T, false>: optional_move_base<T> {
+    using optional_move_base<T>::optional_move_base;
+
     optional_copy_assign_base() = default;
     optional_copy_assign_base(optional_copy_assign_base const&) = default;
     optional_copy_assign_base(optional_copy_assign_base&&) = default;
@@ -240,7 +245,10 @@ struct optional_move_assign_base: optional_copy_assign_base<T> {
 };
 
 template <typename T>
-struct optional_move_assign_base<T, false>: optional_move_base<T> {
+struct optional_move_assign_base<T, false>: optional_copy_assign_base<T> {
+    using value_type = T;
+    using optional_copy_assign_base<T>::optional_copy_assign_base;
+
     optional_move_assign_base() = default;
     optional_move_assign_base(optional_move_assign_base const&) = default;
     optional_move_assign_base(optional_move_assign_base&&) = default;
@@ -248,8 +256,8 @@ struct optional_move_assign_base<T, false>: optional_move_base<T> {
     optional_move_assign_base& operator=(optional_move_assign_base const& opt) = default;
 
     optional_move_assign_base& operator=(optional_move_assign_base&& opt) 
-        noexcept(is_nothrow_move_assignable<T>::value && 
-                is_nothrow_move_constructible<T>::value)
+        noexcept(is_nothrow_move_assignable<value_type>::value && 
+                is_nothrow_move_constructible<value_type>::value)
     {
         this->assign_from(move(opt));
         return *this;
@@ -268,7 +276,7 @@ using optional_sfinae_assign_base_t = sfinae_assign_base<
 
 template <typename T>
 class optional
-    : private optional_move_base<T>
+    : private optional_move_assign_base<T>
     , private optional_sfinae_ctor_base_t<T>
     , private optional_sfinae_assign_base_t<T>
 {
@@ -276,7 +284,7 @@ class optional
 public:
     using value_type = T;
 
-private:
+//private:
     static_assert(!is_same_v<value_type, in_place_t>, 
             "instantiation of optional with in_place_t is ill-formed");
     static_assert(!is_same_v<value_type, nullopt_t>, 
@@ -289,7 +297,6 @@ private:
             "instantiation of optional with an array type is ill-formed");
 
     struct check_tuple_constructor_fail {
-
         static constexpr bool enable_explicit_default() { return false; }
         static constexpr bool enable_implicit_default() { return false; }
         template <class ...>
@@ -388,9 +395,10 @@ private:
     >;
 
 public:
-    optional() = default;
-    optional(optional const&) = default;
-    optional(optional &&) = default;
+    //constexpr optional() noexcept {}
+    //constexpr optional(optional const&) = default;
+    //constexpr optional(optional &&) = default;
+    //constexpr optional(nullopt_t) noexcept {}
 
     template <typename InPlaceT, typename... Args, typename = enable_if<
         And<
@@ -408,52 +416,60 @@ public:
         base(in_place, il, forward<Args>(args)...) {}
 
     // if T is able to implicitly construct with U
-    template <typename U = value_type, enable_if<
+    template <typename U = value_type, typename enable_if<
         check_optional_args_ctor<U>::template enable_implicit<U>()
-    , int> = 0>
+    , int>::type = 0>
     constexpr optional(U&& v)
-        : base(in_place, forward<U>(v)) {}
+        : base(in_place, forward<U>(v)) {
+        DEBUG("construct with rvalue reference U&& implicitly")
+    }
 
     // if T is only able to construct with U explicitly
-    template <typename U = value_type, enable_if<
+    template <typename U, typename enable_if<
         check_optional_args_ctor<U>::template enable_explicit<U>()
-    , int> = 0>
+    , int>::type = 0>
     constexpr explicit optional(U&& v)
-        : base(in_place, forward<U>(v)) {}
+        : base(in_place, forward<U>(v)) {
+        DEBUG("construct with rvalue reference U&& explicitly")
+    }
 
     // if the incoming argument is optional<U>,
     // and T is implicitly constructible with U const&.
-    template <typename U, enable_if<
+    template <typename U, typename enable_if<
         check_optional_like_ctor<U, U const&>::template enable_implicit<U>()
-    , int> = 0>
+    , int>::type = 0>
     optional(optional<U> const& other) {
+        DEBUG("construct with optional<U> const&")
         this->construct_from(other);
     }
 
     // if the incoming argument is optional<U>,
     // and T is explicitly constructible with U const&.
-    template <typename U, enable_if<
+    template <typename U, typename enable_if<
         check_optional_like_ctor<U, U const&>::template enable_explicit()
-    , int> = 0>
+    , int>::type = 0>
     explicit optional(optional<U> const& other) {
+        DEBUG("construct with optional<U> const& explicitly")
         this->construct_from(other);
     }
 
     // if the incoming argument is optional<U>,
     // and T is implicitly constructible with U &&.
-    template <typename U, enable_if<
+    template <typename U, typename enable_if<
         check_optional_like_ctor<U, U &&>::template enable_implicit<U>()
-    , int> = 0>
+    , int>::type = 0>
     optional(optional<U> && other) {
+        DEBUG("construct with optional<U> &&")
         this->construct_from(move(other));
     }
 
     // if the incoming argument is optional<U>,
     // and T is explicitly constructible with U &&.
-    template <typename U, enable_if<
+    template <typename U, typename enable_if<
         check_optional_like_ctor<U, U &&>::template enable_explicit()
-    , int> = 0>
+    , int>::type = 0>
     explicit optional(optional<U> && other) {
+        DEBUG("construct with optional<U> && explicitly")
         this->construct_from(move(other));
     }
 
@@ -489,9 +505,9 @@ public:
     }
 
     // assign from rvalue reference type of optional<U>
-    template <typename U, enable_if<
+    template <typename U, typename enable_if<
         check_optional_like_ctor<U, U &&>::template enable_assign<U>()
-    , int> = 0>
+    , int>::type = 0>
     optional& operator=(optional<U>&& other) {
         this->assign_from(other);
         return *this;
@@ -630,9 +646,9 @@ public:
 
 // comparisons between optionals
 template <typename T, typename U>
-enable_if<
-    is_convertible_v<decltype(declval<T const&>() == declval<U const&>()), bool>, bool
-> operator==(optional<T> const& t, optional<U> const& u) {
+typename enable_if<
+    is_convertible_v<decltype(declval<T const&>() == declval<U const&>()), bool>, bool>::type 
+operator==(optional<T> const& t, optional<U> const& u) {
     if (static_cast<bool>(t) != static_cast<bool>(u))
         return false;
     if (!static_cast<bool>(t))
@@ -641,9 +657,9 @@ enable_if<
 }
 
 template <typename T, typename U>
-enable_if<
-    is_convertible_v<decltype(declval<T const&>() != declval<U const&>()), bool>, bool
-> operator!=(optional<T> const& t, optional<U> const& u) {
+typename enable_if<
+    is_convertible_v<decltype(declval<T const&>() != declval<U const&>()), bool>, bool>::type
+operator!=(optional<T> const& t, optional<U> const& u) {
     if (static_cast<bool>(t) != static_cast<bool>(u))
         return true;
     if (!static_cast<bool>(t))
