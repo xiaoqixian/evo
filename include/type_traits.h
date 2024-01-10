@@ -50,18 +50,38 @@ struct is_same<T, T>: true_type {};
 template <typename T, typename U>
 inline constexpr bool is_same_v = is_same<T, U>::value;
 
-//and helper
-//like multiple enable_if
-template <typename...>
-using expand_to_true = true_type;
-//every Pred::value has to be true.
-template <typename... Pred>
-expand_to_true<enable_if<Pred::value>...> and_helper(int);
-template <typename...>
-false_type and_helper(...);
+// And trait, inherit true_type if all type parameters 
+// are true_type, otherwise inherit false_type.
+template <bool p1, typename... Rest>
+struct AndImpl;
+
+template <>
+struct AndImpl<true>: true_type {};
+template <typename P1, typename... Rest>
+struct AndImpl<true, P1, Rest...>: AndImpl<P1::value, Rest...> {};
+template <typename... Rest>
+struct AndImpl<false, Rest...>: false_type {};
 
 template <typename... Pred>
-using And = decltype(and_helper<Pred...>());
+struct And;
+
+template <>
+struct And<>: true_type {};
+template <typename P, typename... Rest>
+struct And<P, Rest...>: AndImpl<P::value, Rest...> {};
+
+//and helper
+//like multiple enable_if
+//template <typename...>
+//using expand_to_true = true_type;
+////every Pred::value has to be true.
+//template <typename... Pred>
+//expand_to_true<enable_if<Pred::value>...> and_helper(int);
+//template <typename...>
+//false_type and_helper(...);
+
+//template <typename... Pred>
+//using And = decltype(and_helper<Pred...>(0));
 
 //is_not_same
 template <typename T, typename U>
