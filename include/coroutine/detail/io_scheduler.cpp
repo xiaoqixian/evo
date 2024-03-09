@@ -9,10 +9,14 @@
 namespace evo {
 
 #ifdef __APPLE__
-
 #include <sys/event.h>
 #include <sys/time.h>
 
+#else 
+#include <sys/epoll.h>
+#endif
+
+#ifdef __APPLE__
 /*
 * int kevent(
            int kq,	   
@@ -96,6 +100,59 @@ void io_scheduler::run(io_scheduler::timeunit_t timeout) {
 }
 
 #else // TODO: work for Unix platform
+
+evo::task<poll_status>
+io_scheduler::poll(int fd, poll_op op, io_scheduler::timeunit_t timeout) {
+    poll_info pi(fd);
+
+    epoll_event e {};
+    e.events = static_cast<uint32_t>(op) | EPOLLONESHOT | EPOLLRDHUP;
+    e.data.ptr = &pi;
+
+    if (epoll_ctl(this->epoll_fd, EPOLL_CTL_ADD, fd, &e) == -1) 
+        std::cerr << "epoll_ctl error on fd " << fd << std::endl;
+
+    auto res = co_await pi;
+    co_return res;
+}
+
+void io_scheduler::run(io_scheduler::timeunit_t timeout) {
+    const int event_count = 
+        epoll_wait(this->epoll_fd, this->events.data(), io_scheduler::MAX_EVENTS, timeout.count());
+
+    for (std::size_t i = 0; i < event_count; i++) {
+        epoll_event const& ev = this->events[i];
+
+        poll_status status;
+        uint32_t ev_flags = ev.events;
+
+        if (ev_flags & EPOLLIN || ev_flags & EPOLLOUT) 
+            status = poll_status::EVENT;
+        else if (ev_flags & EPOLLERR)
+            status = poll_status::ERROR;
+        else if (ev_flags & EPOLLRDHUP || ev_flags & EPOLLHUP) 
+            status = poll_status::CLOSED;
+        else 
+            throw std::runtime_error("invalid event status");
+
+        poll_info* pip = static_cast<poll_info*>(ev.data.ptr);
+        pip->status = status;
+
+        // del event from epoll
+        if (pip->fd != -1) {
+            epoll_ctl(this->epoll_fd, EPOLL_CTL_DEL, pip->fd, nullptr);
+        }
+
+        this->handles_to_resume.emplace_back(pip->handle);
+    }
+
+    for (auto& h: this->handles_to_resume) {
+        // TODO: handle resume policy
+        h.resume();
+    }
+
+    this->handles_to_resume.clear();
+}
 
 #endif // __APPLE__
 
