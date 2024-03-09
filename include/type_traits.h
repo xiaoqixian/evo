@@ -509,7 +509,7 @@ constexpr bool is_trivially_move_constructible_v = is_trivially_move_constructib
 #endif // #if __has_feature(is_constructible)
 
 
-#if __has_keyword(__is_destructible)
+#if __has_feature(__is_destructible)
 
 template <typename T>
 using is_destructible = bool_constant<__is_destructible(T)>;
