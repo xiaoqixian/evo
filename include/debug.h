@@ -16,11 +16,14 @@
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
+#define YELLOW(M) "\033[0;33m" M "\033[0m"
+
 #ifdef NO_DEBUG
 #define DEBUG(M, ...)
 
 #else
-#define DEBUG(M, ...) fprintf(stderr, "\033[0;33m[DEBUG]\033[0m %s: %d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
+/* #define DEBUG(M, ...) fprintf(stderr, "\033[0;33m[DEBUG]\033[0m %s: %d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__); */
+#define DEBUG(M, ...) fprintf(stderr, YELLOW("[DEBUG]") "%s: %d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
 #endif
 
 #define CLEAN_ERRNO() (errno == 0 ? "None" : strerror(errno))
@@ -36,5 +39,7 @@
 #define CHECK_EXIT(A, M, ...) if (!(A)) { LOG_ERR(M, "\n", ##__VA_ARGS__); exit(1);} 
 
 #define CHECK_DEBUG(A, M, ...) if (!(A)) { DEBUG(M "\n", ##__VA_ARGS__);}
+
+#define ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, "\n", ##__VA_ARGS__); exit(1);} 
 
 #endif

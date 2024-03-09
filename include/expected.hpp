@@ -6,10 +6,11 @@
 #define _EXPECTED_HPP
 
 #include "type_traits.h"
-#include "optional.hpp"
 #include <initializer_list>
 #include <type_traits>
-#include "memory.h"
+#include "utility.h"
+#include "debug.h"
+#include "exception.h"
 
 namespace evo {
 
@@ -24,8 +25,9 @@ struct unexpect_t {
 };
 inline constexpr unexpect_t unexpect {};
 
-class bad_expected_access: public exception {
-    virtual const char* what() const noexcept {
+class bad_expected_access: public evo::exception {
+public:
+    virtual const char* what() const noexcept override {
         return "bad_expected_access";
     }
 };
@@ -42,6 +44,7 @@ struct is_evo_unexpected<unexpected<T>>: true_type {};
 
 template <typename E>
 class unexpected {
+public:
     typedef E error_type;
 private:
     error_type error_value;
@@ -86,6 +89,7 @@ public:
 // T can not be void.
 template <typename T, typename E>
 class expected {
+public:
     typedef T value_type;
     typedef E error_type;
 private:
@@ -626,6 +630,123 @@ public:
             "argument type has to be convertible to value_type");
         return this->has_val ? move(this->val) :
             static_cast<value_type>(forward<U>(default_value));
+    }
+
+    template <typename F>
+    requires(
+        invokable<F, value_type const&>::value &&
+        evo::is_constructible_v<error_type, error_type const&>
+    )
+    constexpr auto and_then(F&& f) const& {
+        using U = invoke_result_t<F, value_type const&>;
+        static_assert(is_evo_expected<U>::value, 
+            "The result of f(**this) must be a specialization of expected");
+        static_assert(is_same_v<typename U::error_type, error_type>,
+            "The error type of f(**this) must have the same error type as this expected");
+        if (this->has_val) {
+            return invoke(forward<F>(f), this->value());
+        } else {
+            return U(unexpect, this->error());
+        }
+    }
+
+    template <typename F>
+    requires(
+        invokable<F, value_type&>::value &&
+        evo::is_constructible_v<error_type, error_type&>
+    )
+    constexpr auto and_then(F&& f) & {
+        using U = remove_cv_t<invoke_result_t<F, value_type&>>;
+        static_assert(is_evo_expected<U>::value, 
+            "The result of f(**this) must be a specialization of expected");
+        static_assert(is_same_v<typename U::error_type, error_type>,
+            "The error type of f(**this) must have the same error type as this expected");
+        if (this->has_val) {
+            return invoke(forward<F>(f), this->value());
+        } else {
+            return U(unexpect, this->error());
+        }
+    }
+
+    template <typename F>
+    requires(
+        invokable<F, value_type const&&>::value &&
+        evo::is_constructible_v<error_type, error_type const&&>
+    )
+    constexpr auto and_then(F&& f) const&& {
+        using U = remove_cv_t<invoke_result_t<F, value_type const&&>>;
+        static_assert(is_evo_expected<U>::value, 
+            "The result of f(**this) must be a specialization of expected");
+        static_assert(is_same_v<typename U::error_type, error_type>,
+            "The error type of f(**this) must have the same error type as this expected");
+        if (this->has_val) {
+            return invoke(forward<F>(f), move(this->value()));
+        } else {
+            return U(unexpect, move(this->error()));
+        }
+    }
+
+    template <typename F>
+    requires(
+        invokable<F, value_type&&>::value &&
+        evo::is_constructible_v<error_type, error_type&&>
+    )
+    constexpr auto and_then(F&& f) && {
+        using U = remove_cv_t<invoke_result_t<F, value_type &&>>;
+        static_assert(is_evo_expected<U>::value, 
+            "The result of f(**this) must be a specialization of expected");
+        static_assert(is_same_v<typename U::error_type, error_type>,
+            "The error type of f(**this) must have the same error type as this expected");
+        if (this->has_val) {
+            return invoke(forward<F>(f), move(this->value()));
+        } else {
+            return U(unexpect, move(this->error()));
+        }
+    }
+
+    template <typename F>
+    constexpr auto transform(F&& f) const& {
+        using U = remove_cv_t<invoke_result_t<F, value_type const&>>;
+        static_assert(is_constructible_v<expected, U>, 
+            "the return result of f(**this) must be constructible by expected");
+        if (this->has_val) {
+            return expected(invoke(forward<F>(f), this->value()));
+        } else {
+            return expected(unexpect, this->error());
+        }
+    }
+    template <typename F>
+    constexpr auto transform(F&& f) & {
+        using U = remove_cv_t<invoke_result_t<F, value_type &>>;
+        static_assert(is_constructible_v<expected, U>, 
+            "the return result of f(**this) must be constructible by expected");
+        if (this->has_val) {
+            return expected(invoke(forward<F>(f), this->value()));
+        } else {
+            return expected(unexpect, this->error());
+        }
+    }
+    template <typename F>
+    constexpr auto transform(F&& f) const&& {
+        using U = remove_cv_t<invoke_result_t<F, value_type const&&>>;
+        static_assert(is_constructible_v<expected, U>, 
+            "the return result of f(**this) must be constructible by expected");
+        if (this->has_val) {
+            return expected(invoke(forward<F>(f), this->value()));
+        } else {
+            return expected(unexpect, this->error());
+        }
+    }
+    template <typename F>
+    constexpr auto transform(F&& f) && {
+        using U = remove_cv_t<invoke_result_t<F, value_type&&>>;
+        static_assert(is_constructible_v<expected, U>, 
+            "the return result of f(**this) must be constructible by expected");
+        if (this->has_val) {
+            return expected(invoke(forward<F>(f), this->value()));
+        } else {
+            return expected(unexpect, this->error());
+        }
     }
 };
 

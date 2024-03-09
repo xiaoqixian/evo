@@ -12,7 +12,6 @@
 #include "utility/declval.h"
 #include "types.h"
 #include <type_traits>
-#include <functional>
 
 namespace evo {
 
@@ -69,6 +68,19 @@ template <>
 struct And<>: true_type {};
 template <typename P, typename... Rest>
 struct And<P, Rest...>: AndImpl<P::value, Rest...> {};
+
+template <typename... Ts>
+struct Xor;
+
+template <typename A, typename B>
+struct Xor<A, B> {
+    static const bool value = A::value ^ B::value;
+};
+
+template <typename A, typename B, typename... Ts>
+struct Xor<A, B, Ts...> {
+    static const bool value = A::value ^ Xor<B, Ts...>::value;
+};
 
 //and helper
 //like multiple enable_if
@@ -172,13 +184,23 @@ struct remove_cv_ref {
 template <typename T>
 using remove_cv_ref_t = typename remove_cv<T>::type;
 
-//remove_extents
 template <typename T>
-struct remove_extents {typedef T type;};
+struct remove_cvref {
+    typedef typename remove_cv<typename remove_reference<T>::type>::type type;
+};
 template <typename T>
-struct remove_extents<T[]> {typedef T type;};
+using remove_cvref_t = typename remove_cv<T>::type;
+
+//remove_extent
+template <typename T>
+struct remove_extent {typedef T type;};
+template <typename T>
+struct remove_extent<T[]> {typedef T type;};
 template <typename T, size_t N>
-struct remove_extents<T[N]> {typedef T type;};
+struct remove_extent<T[N]> {typedef T type;};
+
+template <typename T>
+using remove_extent_t = typename remove_extent<T>::type;
 
 //remove all extents
 template <typename T>
@@ -214,6 +236,9 @@ template <bool b, typename If, typename Then>
 struct conditional {typedef If type;};
 template <typename If, typename Then>
 struct conditional<false, If, Then> {typedef Then type;};
+
+template <bool b, typename If, typename Then>
+using conditional_t = typename conditional<b, If, Then>::type;
 
 //add const
 template <typename T>
@@ -405,10 +430,14 @@ inline constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
 //is_default_constructible
 template <typename T>
 struct is_default_constructible: public is_constructible<T> {};
+template <typename T>
+constexpr bool is_default_constructible_v = is_default_constructible<T>::value;
 
 //is_nothrow_constructible
 template <typename T, typename... Args>
 struct is_nothrow_constructible: public bool_constant<__is_nothrow_constructible(T, Args...)> {};
+template <typename T, typename... Args>
+constexpr bool is_nothrow_constructible_v = is_nothrow_constructible<T, Args...>::value;
 
 //is_move_constructible
 template <typename T>
@@ -425,6 +454,8 @@ constexpr bool is_copy_constructible_v = is_copy_constructible<T>::value;
 //is_nothrow_copy_constructible
 template <typename T>
 struct is_nothrow_copy_constructible: public is_nothrow_constructible<T, typename add_lvalue_reference<typename add_const<T>::type>::type> {};
+template <typename T>
+constexpr bool is_nothrow_copy_constructible_v = is_nothrow_copy_constructible<T>::value;
 
 //is_nothrow_default_constructible
 template <typename T>
@@ -466,10 +497,14 @@ struct is_trivially_constructible<T>: bool_constant<is_scalar<T>::value> {};
 //is_trivially_copy_constructible
 template <typename T>
 struct is_trivially_copy_constructible: is_trivially_constructible<T, typename add_lvalue_reference<T>::type> {};
+template <typename T>
+constexpr bool is_trivially_copy_constructible_v = is_trivially_copy_constructible<T>::value;
 
 //is_trivially_move_constructible
 template <typename T>
 struct is_trivially_move_constructible: is_trivially_constructible<T, typename add_rvalue_reference<T>::type> {};
+template <typename T>
+constexpr bool is_trivially_move_constructible_v = is_trivially_move_constructible<T>::value;
 
 #endif // #if __has_feature(is_constructible)
 
@@ -539,6 +574,8 @@ inline constexpr bool is_convertible_v = is_convertible<From, To>::value;
 //is_assignable
 template <typename T, typename U>
 struct is_assignable: bool_constant<__is_assignable(T, U)> {};
+template <typename T, typename U>
+constexpr bool is_assignable_v = is_assignable<T, U>::value;
 
 //is_nothrow_assignable
 template <typename T, typename Arg>
@@ -549,6 +586,8 @@ template <typename T>
 struct is_move_assignable: is_assignable<
                            typename add_lvalue_reference<T>::type,
                            typename add_rvalue_reference<T>::type> {};
+template <typename T>
+constexpr bool is_move_assignable_v = is_move_assignable<T>::value;
 
 //is_nothrow_move_assignable
 template <typename T>
@@ -556,12 +595,16 @@ struct is_nothrow_move_assignable: public bool_constant<is_nothrow_constructible
                                    typename add_lvalue_reference<T>::type, 
                                    typename add_rvalue_reference<T>::type
                                    >::value> {};
+template <typename T>
+constexpr bool is_nothrow_move_assignable_v = is_nothrow_move_assignable<T>::value;
 
 //is_copy_assignable
 template <typename T>
 struct is_copy_assignable: is_assignable<
                            typename add_lvalue_reference<T>::type, 
                            typename add_lvalue_reference<T>::type> {};
+template <typename T>
+constexpr bool is_copy_assignable_v = is_copy_assignable<T>::value;
 
 //is_nothrow_copy_assignable
 template <typename T>
@@ -569,6 +612,8 @@ struct is_nothrow_copy_assignable: bool_constant<is_nothrow_constructible<
                                    typename add_lvalue_reference<T>::type,
                                    typename add_lvalue_reference<T>::type
                                    >::value> {};
+template <typename T>
+constexpr bool is_nothrow_copy_assignable_v = is_nothrow_copy_assignable<T>::value;
 
 //is_trivially_assignable
 template <typename T, typename Arg>
@@ -752,7 +797,7 @@ struct _decay<T, true> {
 public:
     typedef typename conditional<
         is_array<T>::value,
-        typename remove_extents<T>::type*,
+        typename remove_extent<T>::type*,
         typename conditional<
             is_function<T>::value,
             typename add_pointer<T>::type,
@@ -779,9 +824,12 @@ struct __any {
 };
 
 //// ------- INVOKE !!! ----------------
+
 //// TODO: invokable is much different than stl
+// if Ret is void, the return type is ignored.
+// otherwise return type has to be the same.
 template <typename Ret, typename F, typename... Args>
-struct invokable {
+struct invokable_r {
     struct nat;
     
     template <typename X, typename... XArgs>
@@ -806,11 +854,16 @@ struct invokable {
 };
 
 template <typename F, typename... Args>
-struct invoke_of: public enable_if<
-    invokable<void, F, Args...>::value,
-    typename invokable<void, F, Args...>::Result
+using invokable = invokable_r<void, F, Args...>;
+
+template <typename F, typename... Args>
+struct invoke_result: public enable_if<
+    invokable<F, Args...>::value,
+    typename invokable<F, Args...>::Result
 > {};
 
+template <typename F, typename... Args>
+using invoke_result_t = typename invoke_result<F, Args...>::type;
 
 /// About how to invoke a member pointer
 template <typename>
@@ -833,10 +886,11 @@ constexpr decltype(auto) invoke_memptr(M C::* method, T&& instance, Args... args
     }
 }
 
+// TODO: noexcept
 template <typename F, typename... Args>
-constexpr std::invoke_result_t<F, Args...>
+constexpr invoke_result_t<F, Args...>
 invoke(F&& f, Args&&... args) 
-noexcept(std::is_nothrow_invocable_v<F, Args...>){
+{
     if constexpr (is_member_pointer<F>::value) {
         return invoke_memptr(f, forward<Args>(args)...);
     } else {

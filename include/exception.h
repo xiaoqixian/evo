@@ -15,8 +15,7 @@ class exception {
 public:
     exception() noexcept = default;
     exception(exception const&) noexcept = default; 
-    virtual ~exception() noexcept;
-    virtual const char* what() const noexcept;
+    virtual const char* what() const noexcept = 0;
 };
 
 class logic_error: public exception {
@@ -25,7 +24,6 @@ public:
     explicit logic_error(const char*);
     logic_error() noexcept;
     logic_error(logic_error const&) noexcept;
-    virtual ~logic_error() noexcept;
     virtual const char* what() const noexcept;
 };
 
@@ -35,7 +33,6 @@ public:
     //TODO length_error constructor accepts string
 
     length_error(length_error const&) noexcept = default;
-    virtual ~length_error() noexcept;
 };
 
 }

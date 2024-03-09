@@ -9,8 +9,13 @@
 #include "type_traits.h"
 #include "concepts.h"
 #include "debug.h"
+#include <atomic>
 
 namespace evo {
+#if __cplusplus >= 202002L
+
+template <typename T>
+class allocator;
 
 namespace pointer_type_impl {
 
@@ -38,8 +43,6 @@ template <typename T, typename D>
 struct pointer_type<T, D, false> {
     typedef T* type;
 };
-
-#if __cplusplus >= 202002L
 
 template <typename T>
 requires evo::is_array_v<T>
@@ -111,24 +114,24 @@ private:
 public:
     constexpr unique_ptr() noexcept 
         requires(
-            evo::DefaultConstructible<pointer> &&
-            evo::DefaultConstructible<deleter_type>
+            evo::default_constructible<pointer> &&
+            evo::default_constructible<deleter_type>
         )
         : ptr(pointer()), dter(deleter_type())
     {}
 
     constexpr unique_ptr(std::nullptr_t) noexcept
-        requires evo::DefaultConstructible<deleter_type>
+        requires evo::default_constructible<deleter_type>
         : ptr(nullptr), dter(deleter_type()) {}
 
     explicit unique_ptr(pointer ptr) noexcept
-        requires evo::DefaultConstructible<deleter_type>
+        requires evo::default_constructible<deleter_type>
         : ptr(ptr), dter(deleter_type()) {}
 
     unique_ptr(unique_ptr const&) = delete;
 
     unique_ptr(unique_ptr&& other) noexcept 
-        requires evo::MoveConstructible<deleter_type>
+        requires evo::move_constructible<deleter_type>
         : ptr(other.ptr), 
             dter(evo::forward<deleter_type>(other.get_deleter())) 
     {}
@@ -147,7 +150,7 @@ public:
     }
 
     unique_ptr& operator=( unique_ptr&& other ) noexcept 
-        requires evo::MoveAssignable<deleter_type>
+        requires evo::move_assignable<deleter_type>
     {
         if (*this) {
             this->get_deleter()(this->get());
@@ -168,7 +171,7 @@ public:
     unique_ptr& operator=( unique_ptr const& ) = delete;
 
     template <typename U, Deleter<U> E>
-        requires (evo::Assignable<deleter_type&, E&&> &&
+        requires (evo::assignable<deleter_type&, E&&> &&
                 !evo::is_array_v<U>)
     unique_ptr& operator=( unique_ptr<U, E>&& other ) noexcept {
         if (*this)
@@ -242,22 +245,22 @@ private:
 
 public:
     constexpr unique_ptr() noexcept 
-        requires evo::DefaultConstructible<deleter_type>
+        requires evo::default_constructible<deleter_type>
         : ptr(pointer()), dter(deleter_type())
     {}
 
     constexpr unique_ptr(std::nullptr_t) noexcept
-        requires evo::DefaultConstructible<deleter_type>
+        requires evo::default_constructible<deleter_type>
         : ptr(nullptr), dter(deleter_type()) {}
 
     explicit unique_ptr(pointer ptr) noexcept
-        requires evo::DefaultConstructible<deleter_type>
+        requires evo::default_constructible<deleter_type>
         : ptr(ptr), dter(deleter_type()) {}
 
     unique_ptr(unique_ptr const&) = delete;
 
     unique_ptr(unique_ptr&& other) noexcept 
-        requires evo::MoveConstructible<deleter_type>
+        requires evo::move_constructible<deleter_type>
         : ptr(other.ptr), 
             dter(evo::forward<deleter_type>(other.get_deleter())) 
     {}
@@ -276,7 +279,7 @@ public:
     }
 
     unique_ptr& operator=( unique_ptr&& other ) noexcept 
-        requires evo::MoveAssignable<deleter_type>
+        requires evo::move_assignable<deleter_type>
     {
         if (*this) {
             this->get_deleter()(this->get());
@@ -306,7 +309,7 @@ public:
     }
 
     template <typename U, Deleter<U> E>
-        requires (evo::Assignable<deleter_type&, E&&> &&
+        requires (evo::assignable<deleter_type&, E&&> &&
                 !evo::is_array_v<U>)
     unique_ptr& operator=( unique_ptr<U, E>&& other ) noexcept {
         if (*this)
@@ -369,7 +372,7 @@ public:
 };
 
 template <typename T, typename... Args>
-requires (!evo::is_array_v<T> && evo::Constructible<T, Args...>)
+requires (!evo::is_array_v<T> && evo::constructible<T, Args...>)
 constexpr unique_ptr<T> make_unique(Args&&... args) {
     return unique_ptr<T>(new T(evo::forward<Args>(args)...));
 }
@@ -384,7 +387,96 @@ template <typename T, typename... Args>
 requires array_known_bound_v<T>
 auto make_unique( Args&&... args ) = delete;
 
-#endif
+template <typename A, typename T>
+concept Allocator = requires(A alloc, size_t size) {
+    { alloc.allocate(size) } -> evo::same_as<T*>;
+};
+
+// shared_ptr
+template <typename T>
+class weak_ptr;
+
+class shared_count {
+    std::atomic<long> count = 1;
+
+public:
+    constexpr shared_count() noexcept = default;
+    constexpr shared_count(long ref) noexcept: count(ref) {}
+
+    inline void add_shared() noexcept {
+        std::atomic_fetch_add(&this->count, (long)1);
+    }
+
+    virtual void on_zero_shared() = 0;
+
+    inline bool release_shared() noexcept {
+        return std::atomic_fetch_sub(&this->count, (long)1) == 0;
+    }
+
+    inline long use_count() const noexcept {
+        return std::atomic_load(&this->count);
+    }
+};
+
+template <typename T, Deleter<T> D, Allocator<T> A>
+class shared_ptr_pointer: public shared_count {
+private:
+    typedef evo::remove_extent_t<T> element_type;
+    element_type* ptr;
+    D deleter;
+    A alloc;
+public:
+    constexpr shared_ptr_pointer() = default;
+    constexpr shared_ptr_pointer( std::nullptr_t ): ptr(nullptr) {}
+
+    shared_ptr_pointer(element_type* ptr)
+        requires (evo::default_constructible<D> && 
+                evo::default_constructible<A>)
+        : ptr(ptr) {}
+
+    shared_ptr_pointer(element_type* ptr, D dter, A alloc) 
+        : ptr(ptr), deleter(dter), alloc(alloc) {}
+
+    element_type* operator->() {
+        return this->ptr;
+    }
+
+    inline virtual void on_zero_shared() override {
+        this->deleter(this->ptr);
+        this->deleter.~D();
+    }
+};
+
+template <typename T>
+class shared_ptr {
+public:
+    typedef evo::remove_extent_t<T> element_type;
+    typedef weak_ptr<T> weak_type;
+    
+private:
+    element_type* ptr;
+    shared_count* ctrl;
+
+public:
+    constexpr shared_ptr() noexcept
+        : ptr(nullptr), ctrl(nullptr) {}
+    constexpr shared_ptr( std::nullptr_t ) noexcept
+        : ptr(nullptr), ctrl(nullptr) {}
+
+    template <typename Y>
+    requires evo::convertible_to<Y*, T*>
+    shared_ptr( Y* p ) noexcept 
+        :ptr(p)
+    {
+        typedef shared_ptr_pointer<Y*, default_delete<Y>, allocator<Y>> CtrlBlock;
+        this->ctrl = new CtrlBlock(p, default_delete<Y>(), allocator<Y>());
+    }
+};
+
+template <typename Y>
+
+
+#endif // end of __cplusplus >= 202002L
 
 }
 

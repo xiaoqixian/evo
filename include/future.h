@@ -6,6 +6,7 @@
 #define _FUTURE_H
 
 #include "type_traits.h"
+#include <type_traits>
 
 namespace evo {
 
@@ -14,6 +15,43 @@ namespace evo {
 template <typename T>
 class future {
 public:
+    typedef T value_type;
+private:
+    bool is_valid;
+    value_type val;
+public:
+    future() noexcept
+        requires(evo::is_default_constructible_v<value_type>)
+        : is_valid(false) 
+    {}
+
+    template <typename U>
+    future(future<U>&& other) noexcept
+        requires(evo::is_constructible_v<value_type, U&&>)
+        : val(evo::move(other.get())),
+          is_valid(true)
+    {
+        other.is_valid = false;
+    }
+
+    future(future const&) = delete;
+
+    template <typename U>
+    future& operator=(future<U>&& other) noexcept
+        requires(evo::is_constructible_v<value_type, U&&>)
+    {
+        this->val = evo::move(other.get());
+        this->is_valid = true;
+        other.is_valid = false;
+        return *this;
+    }
+
+    future& operator=(future const&) = delete;
+
+    inline constexpr bool valid() const noexcept {
+        return this->is_valid;
+    }
+
     T get() noexcept;
 
     void wait() noexcept;
@@ -21,10 +59,10 @@ public:
 };
 
 //promise
-template <typename T>
+template <typename R>
 class promise {
 public:
-    future<T> get_future() noexcept; 
+    future<R> get_future() noexcept; 
 };
 
 // packaged_task
@@ -34,7 +72,7 @@ class packaged_task;
 
 template <typename F, typename... Args>
 class packaged_task<F(Args...)> {
-    typedef typename result_of<F(Args...)>::type return_type;
+    typedef typename std::result_of<F(Args...)>::type return_type;
 public:
     bool valid() const noexcept;
 

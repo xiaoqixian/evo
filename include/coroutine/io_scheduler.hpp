@@ -1,0 +1,121 @@
+// Date:   Thu Mar 07 22:44:51 2024
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#ifndef _IO_SCHEDULER_H
+#define _IO_SCHEDULER_H
+
+#include <chrono>
+#include <sys/event.h>
+#include <vector>
+#include <coroutine>
+
+#include "task.hpp"
+
+namespace evo {
+
+#ifdef __APPLE__
+
+enum class poll_op {
+    READ = EVFILT_READ,
+    WRITE = EVFILT_WRITE,
+    READ_WRITE = EVFILT_READ | EVFILT_WRITE
+};
+
+#else
+
+enum class poll_op {
+    READ = EPOLLIN,
+    WRITE = EPOLLOUT,
+    READ_WRITE = EPOLLIN | EPOLLOUT
+};
+
+#endif // __APPLE__
+
+enum class poll_status {
+    // the poll operation was successful
+    EVENT,
+
+    // the poll operation timeout
+    TIMEOUT,
+
+    // the poll operation failed
+    ERROR,
+
+    // the file descriptor is closed
+    CLOSED
+};
+
+struct poll_info {
+    int fd;
+    std::coroutine_handle<> handle;
+    poll_status status;
+
+    poll_info(int fd): fd(fd), handle(nullptr) {}
+
+    struct poll_awaiter {
+        poll_info& pi;
+
+        explicit poll_awaiter(poll_info& pi): pi(pi) {}
+
+        inline bool await_ready() const noexcept {
+            return false;
+        }
+
+        void await_suspend(std::coroutine_handle<> h) noexcept {
+            this->pi.handle = h;
+            // TODO: why put atomic_thread_fence here.
+            // std::atomic_thread_fence(std::memory_order_release);
+        }
+
+        poll_status await_resume() const noexcept {
+            return this->pi.status;
+        }
+    };
+
+    poll_awaiter operator co_await() noexcept {
+        return poll_awaiter(*this);
+    }
+};
+
+class io_scheduler {
+#ifdef __APPLE__
+    typedef struct kevent poll_event;
+
+    int kq_fd;
+
+#else
+    typedef struct epoll_event poll_event;
+    
+    int epoll_fd;
+
+#endif
+
+    typedef std::chrono::milliseconds timeunit_t;
+    
+    static const constexpr timeunit_t DEFAULT_TIMEOUT { 1000 };
+    static const constexpr int MAX_EVENTS = 16;
+
+    std::array<poll_event, MAX_EVENTS> events {};
+    std::vector<std::coroutine_handle<>> handles_to_resume;
+
+public:
+    io_scheduler() = default;
+    io_scheduler(io_scheduler const&) = delete;
+
+    evo::task<poll_status> poll(int fd, poll_op op, 
+            std::chrono::milliseconds timeout);
+
+    void run(timeunit_t);
+    void process_event(poll_info* info);
+
+#ifdef __APPLE__
+    static poll_status event_to_status(u_short flags);
+#else
+    static poll_status event_to_status(uint32_t flags);
+#endif
+};
+
+} // namespace evo
+
+#endif // _IO_SCHEDULER_H

@@ -1,8 +1,8 @@
 [
 {
-  "directory": "/Users/lunar/pros/evo/build",
-  "command": "/Library/Developer/CommandLineTools/usr/bin/c++  -I/Users/lunar/pros/evo/include -std=gnu++20 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -o CMakeFiles/test.dir/test/test1.cpp.o -c /Users/lunar/pros/evo/test/test1.cpp",
+  "directory": "/Users/lunar/pros/evo",
+  "command": "/usr/local/opt/llvm/bin/clang++  -I/Users/lunar/pros/evo/include -std=gnu++20 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -o CMakeFiles/out.dir/test/test1.cpp.o -c /Users/lunar/pros/evo/test/test1.cpp",
   "file": "/Users/lunar/pros/evo/test/test1.cpp",
-  "output": "CMakeFiles/test.dir/test/test1.cpp.o"
+  "output": "CMakeFiles/out.dir/test/test1.cpp.o"
 }
 ]
