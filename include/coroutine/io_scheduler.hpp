@@ -103,8 +103,7 @@ public:
     io_scheduler() = default;
     io_scheduler(io_scheduler const&) = delete;
 
-    evo::task<poll_status> poll(int fd, poll_op op, 
-            std::chrono::milliseconds timeout);
+    evo::task<poll_status> poll(int fd, poll_op op, timeunit_t timeout);
 
     void run(timeunit_t);
     void process_event(poll_info* info);
