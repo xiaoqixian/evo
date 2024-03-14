@@ -11,11 +11,16 @@
 
 namespace evo {
 
+namespace concepts {
+
 template <typename T, typename... Args>
 concept constructible = evo::is_constructible_v<T, Args...>;
 
 template <typename T, typename U>
 concept assignable = evo::is_assignable_v<T, U>;
+
+template <typename T>
+concept copy_constructible = evo::is_copy_assignable_v<T>;
 
 template <typename T>
 concept move_constructible = evo::is_move_constructible_v<T>;
@@ -35,7 +40,9 @@ concept convertible_to = evo::is_constructible_v<From, To> &&
         static_cast<To>(declval<From>());
     };
 
-}
+} // namespace concepts
+
+} // namespace evo
 
 #endif
 
