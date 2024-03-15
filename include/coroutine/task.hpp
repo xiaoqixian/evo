@@ -1,52 +1,50 @@
-// Date:   Wed Mar 06 16:41:11 2024
+// Date:   Thu Mar 14 23:05:29 2024
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
-#ifndef _TASK_HPP
-#define _TASK_HPP
+#ifndef __TASK_HPP
+#define __TASK_HPP
 
+#include "coroutine/promise_base.hpp"
 #include <coroutine>
-#include <exception>
-#include <utility>
-#include <variant>
-#include <stdexcept>
-
-#include "concepts.h"
-#include "type_traits.h"
+#include "debug.h"
 
 namespace evo {
 
-template <typename Promise = void>
-using coroutine_handle = std::coroutine_handle<Promise>;
-
-template <typename return_type = void>
+template <typename Ret = void>
 class task;
 
-namespace task_impl_detail {
+namespace task_impl {
 
-template <typename promise_type>
-concept promise_with_continuation = requires(promise_type promise, coroutine_handle<> continuation) {
-    { promise.get_continuation() } -> evo::convertible_to<coroutine_handle<>>;
+template <typename Ret>
+struct task_promise;
 
-    promise.set_continuation(continuation);
-};
-    
-struct promise_base {
-    friend struct final_awaiter;
+template <typename Ret>
+using task_promise_base = 
+    evo::promise_base<Ret>;
+
+template <typename Ret>
+struct task_promise: public task_promise_base<Ret> {
+    std::coroutine_handle<> continuation;
+
+    task<Ret> get_return_object() {
+        return task<Ret>(std::coroutine_handle<task_promise<Ret>>::from_promise(*this));
+    }
 
     struct final_awaiter {
         inline constexpr bool await_ready() const noexcept {
             return false;
         }
 
-        /// if the corotine has continuation, 
-        /// switch execution to the continuation.
-        /// otherwise switch to std::noop_coroutine.
-        template <promise_with_continuation promise_type>
-        inline coroutine_handle<> await_suspend(coroutine_handle<promise_type> coro) noexcept {
+        // technically, the typename P should be a type 
+        // with a continuation. 
+        // TODO: I'll try to add a constraint here.
+        template <typename P>
+        std::coroutine_handle<> 
+        await_suspend(std::coroutine_handle<P> coro) noexcept {
             auto const& prom = coro.promise();
-            if ( prom.get_continuation() != nullptr ) {
-                return prom.get_continuation();
+            if ( prom.continuation != nullptr ) {
+                return prom.continuation;
             } else {
                 return std::noop_coroutine();
             }
@@ -55,141 +53,26 @@ struct promise_base {
         inline constexpr void await_resume() const noexcept {}
     };
 
-    constexpr promise_base() = default;
-    constexpr ~promise_base() = default;
-
-    auto initial_suspend() {
-        return std::suspend_always();
-    }
-
+    // actually this is an override.
     auto final_suspend() noexcept {
         return final_awaiter();
     }
 
-    auto get_continuation() const& noexcept {
-        return this->continuation;
-    }
-
-    auto get_continuation() && noexcept {
-        return std::move(this->continuation);
-    }
-
-    void set_continuation(coroutine_handle<> continuation) noexcept {
-        this->continuation = continuation;
-    }
-
-private:
-    coroutine_handle<> continuation;
-};
-
-template <typename return_type>
-struct promise final : promise_base {
-    typedef task<return_type> task_type;
-    typedef coroutine_handle<promise<return_type>> handle_t;
-
-    static constexpr bool return_type_is_ref = evo::is_reference_v<return_type>;
-    typedef typename evo::conditional_t<
-            return_type_is_ref, 
-            evo::remove_cvref_t<return_type>*, 
-            evo::remove_cv_t<return_type>
-    > stored_type;
-
-    // struct that indicates the storage variant is not 
-    // set yet.
-    struct unset_return_type {
-        constexpr unset_return_type() noexcept = default;
-        unset_return_type(unset_return_type const&) = delete;
-        unset_return_type(unset_return_type &&) = delete;
-    };
-
-    typedef std::variant<unset_return_type, stored_type, std::exception_ptr> variant_type;
-
-    variant_type storage {};
-
-    // implemented after task_type is defined.
-    task_type get_return_object() noexcept;
-
-    template <typename value_type>
-        requires (return_type_is_ref and std::is_constructible_v<return_type, value_type&&>) or 
-            (not return_type_is_ref and std::is_constructible_v<stored_type, value_type&&>)
-    void return_value(value_type&& val) noexcept {
-        if constexpr (return_type_is_ref) {
-            return_type ref = static_cast<value_type&&>(val);
-            this->storage.template emplace<stored_type>(std::addressof(val));
-        } else {
-            this->storage.template emplace<stored_type>(std::forward<value_type>(val));
-        }
-    }
-
-    void unhandled_exception() noexcept {
-        new (&this->storage) variant_type( std::current_exception() );
-    }
-
-    auto result() & {
-        if (std::holds_alternative<stored_type>(this->storage)) {
-            if constexpr (return_type_is_ref) {
-                return static_cast<return_type>(*std::get<stored_type>(this->storage));
-            } else {
-                return static_cast<return_type const&>(std::get<stored_type>(this->storage));
-            }
-        } 
-        else if (std::holds_alternative<std::exception_ptr>(this->storage)) {
-            std::rethrow_exception(std::get<std::exception_ptr>(this->storage));
-        }
-        else {
-            throw std::runtime_error("return value is never set, run the coroutine first.");
-        }
-    }
-
-    auto result() && {
-        if (std::holds_alternative<stored_type>(this->storage)) {
-            if constexpr (return_type_is_ref) {
-                return static_cast<return_type>(*std::get<stored_type>(this->storage));
-            } 
-            else if constexpr (std::is_move_constructible_v<return_type>) {
-                return static_cast<return_type&&>(std::get<return_type>(this->storage));
-            }
-            else {
-                return static_cast<return_type const&&>(std::get<stored_type>(this->storage));
-            }
-        } 
-        else if (std::holds_alternative<std::exception_ptr>(this->storage)) {
-            std::rethrow_exception(std::get<std::exception_ptr>(this->storage));
-        }
-        else {
-            throw std::runtime_error("return value is never set, run the coroutine first.");
-        }
-    }
-
-    // TODO: result() of const& and &&.
-};
-
-template <>
-class promise<void> final: promise_base {
-    typedef task<void> task_type;
-    typedef coroutine_handle<promise<void>> handle_t;
-
-    std::exception_ptr except_ptr;
-
-    task_type get_return_object() noexcept;
-
-    void return_void() noexcept {}
-
-    void unhandled_exception() noexcept {
-        this->except_ptr = std::current_exception();
+    void set_continuation(std::coroutine_handle<> c) noexcept {
+        this->continuation = c;
     }
 };
 
-} // namespace task_impl_detail
+} // namespace task_impl
 
-template <typename return_type>
+template <typename Ret>
 class task {
 public:
-    typedef task_impl_detail::promise<return_type> promise_type;
-    typedef coroutine_handle<promise_type> handle_t;
+    typedef task_impl::task_promise<Ret> promise_type;
+    typedef std::coroutine_handle<promise_type> handle_t;
 
-    constexpr task() noexcept : handle(nullptr) {}
-    explicit constexpr task(handle_t h) noexcept : handle(h) {}
+    constexpr task() noexcept: handle(nullptr) {}
+    explicit constexpr task(handle_t h) noexcept: handle(h) {}
 
     task(task const&) = delete;
     task(task&& other) noexcept 
@@ -228,54 +111,32 @@ public:
             return false;
         }
 
-        coroutine_handle<> await_suspend(coroutine_handle<> continuation) noexcept {
+        std::coroutine_handle<> 
+        await_suspend(std::coroutine_handle<> continuation) noexcept {
             this->handle.promise().set_continuation(continuation);
             return this->handle;
         }
     };
 
-    auto operator co_await() const& noexcept {
-        struct awaiter: awaiter_base {
-            auto await_resume() const noexcept {
-                return this->handle.promise().result();
-            }
-        };
+    template <typename R = Ret>
+    struct awaiter: public awaiter_base {
+        auto await_resume() const noexcept {
+            return this->handle.promise().result();
+        }
+    };
 
-        return awaiter { this->handle };
-    }
+    template <>
+    struct awaiter<void>: public awaiter_base {
+        auto await_resume() const noexcept {}
+    };
 
-    auto operator co_await() && noexcept {
-        struct awaiter: awaiter_base {
-            auto await_resume() const noexcept {
-                return std::move(this->handle.promise()).result();
-            }
-        };
-
-        return awaiter { this->handle };
+    auto operator co_await() noexcept {
+        return awaiter<>(this->handle);
     }
 private:
     handle_t handle;
 };
 
-namespace task_impl_detail {
-
-template <typename return_type>
-inline task<return_type> 
-promise<return_type>::get_return_object() noexcept {
-    return task<return_type> {
-        coroutine_handle<promise<return_type>>::from_promise(*this)
-    };
-}
-
-inline task<void>
-promise<void>::get_return_object() noexcept {
-    return task<void> {
-        coroutine_handle<promise<void>>::from_promise(*this)
-    };
-}
-
-} // namespace task_impl_detail
-
 } // namespace evo
 
-#endif // _TASK_HPP
+#endif // __TASK_HPP
