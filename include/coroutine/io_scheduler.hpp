@@ -78,7 +78,16 @@ struct poll_info {
     }
 };
 
-class io_scheduler {
+enum class poll_resume_policy {
+    // resume on the current thread.
+    INLINE,
+
+    // resume in a thread pool
+    THREAD_POOL
+};
+
+class io_scheduler_base {
+public:
 #ifdef __APPLE__
     typedef struct kevent poll_event;
 
@@ -99,20 +108,37 @@ class io_scheduler {
     std::array<poll_event, MAX_EVENTS> events {};
     std::vector<std::coroutine_handle<>> handles_to_resume;
 
-public:
-    io_scheduler() = default;
-    io_scheduler(io_scheduler const&) = delete;
-
     evo::task<poll_status> poll(int fd, poll_op op, timeunit_t timeout);
+    evo::task<poll_status> poll(int fd, poll_op op);
 
     void run(timeunit_t);
     void process_event(poll_info* info);
 
-#ifdef __APPLE__
-    static poll_status event_to_status(u_short flags);
-#else
-    static poll_status event_to_status(uint32_t flags);
-#endif
+    virtual void resume_handles() = 0;
+
+// #ifdef __APPLE__
+//     static poll_status event_to_status(u_short flags);
+// #else
+//     static poll_status event_to_status(uint32_t flags);
+// #endif
+};
+
+template <typename ThreadPoolType = void>
+class io_scheduler: public io_scheduler_base {
+    typedef ThreadPoolType threadpool_t;
+
+    std::shared_ptr<threadpool_t> pool;
+public:
+    io_scheduler() = delete;
+    io_scheduler(std::shared_ptr<threadpool_t> p);
+
+    virtual void resume_handles() override;
+};
+
+template <>
+class io_scheduler<void>: public io_scheduler_base {
+public:
+    virtual void resume_handles() override;
 };
 
 } // namespace evo

@@ -1,0 +1,16 @@
+// Date:   Mon Mar 11 12:51:12 2024
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#ifndef _QUEUE_HPP
+#define _QUEUE_HPP
+
+namespace evo {
+namespace lockfree {
+
+
+
+} // namespace lockfree
+} // namespace evo
+
+#endif // _QUEUE_HPP

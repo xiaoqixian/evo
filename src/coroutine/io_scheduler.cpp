@@ -29,7 +29,7 @@ namespace evo {
   EV_SET(kev, ident, filter, flags, fflags, data, udata);
 */
 evo::task<poll_status> 
-io_scheduler::poll(int fd, poll_op op, io_scheduler::timeunit_t timeout) {
+io_scheduler_base::poll(int fd, poll_op op, io_scheduler_base::timeunit_t timeout) {
     poll_info pi(fd);
 
     struct kevent ev[2] {};;
@@ -55,7 +55,28 @@ io_scheduler::poll(int fd, poll_op op, io_scheduler::timeunit_t timeout) {
     co_return res;
 }
 
-void io_scheduler::run(io_scheduler::timeunit_t timeout) {
+evo::task<poll_status> 
+io_scheduler_base::poll(int fd, poll_op op) {
+    poll_info pi(fd);
+
+    struct kevent ev;
+
+    // add fd to kqueue
+    EV_SET(&ev, fd, static_cast<int16_t>(op), 
+            EV_ADD | EV_CLEAR | EV_ONESHOT, 0, 0, 
+            static_cast<void*>(&pi));
+
+    int ret = kevent(this->kq_fd, &ev, 1, NULL, 0, NULL);
+    if (ret == -1) {
+        std::cerr << "kevent() failed" << std::endl;
+        std::exit(1);
+    }
+
+    auto res = co_await pi;
+    co_return res;
+}
+
+void io_scheduler_base::run(io_scheduler_base::timeunit_t timeout) {
     struct timespec t { 0, timeout.count() };;
     
     const int n_events = kevent(
@@ -99,10 +120,10 @@ void io_scheduler::run(io_scheduler::timeunit_t timeout) {
     this->handles_to_resume.clear();
 }
 
-#else // TODO: work for Unix platform
+#else // for linux platform
 
 evo::task<poll_status>
-io_scheduler::poll(int fd, poll_op op, io_scheduler::timeunit_t timeout) {
+io_scheduler_base::poll(int fd, poll_op op, io_scheduler_base::timeunit_t timeout) {
     poll_info pi(fd);
 
     epoll_event e {};
@@ -116,9 +137,9 @@ io_scheduler::poll(int fd, poll_op op, io_scheduler::timeunit_t timeout) {
     co_return res;
 }
 
-void io_scheduler::run(io_scheduler::timeunit_t timeout) {
+void io_scheduler_base::run(io_scheduler_base::timeunit_t timeout) {
     const int event_count = 
-        epoll_wait(this->epoll_fd, this->events.data(), io_scheduler::MAX_EVENTS, timeout.count());
+        epoll_wait(this->epoll_fd, this->events.data(), io_scheduler_base::MAX_EVENTS, timeout.count());
 
     for (std::size_t i = 0; i < event_count; i++) {
         epoll_event const& ev = this->events[i];
@@ -146,14 +167,32 @@ void io_scheduler::run(io_scheduler::timeunit_t timeout) {
         this->handles_to_resume.emplace_back(pip->handle);
     }
 
-    for (auto& h: this->handles_to_resume) {
-        // TODO: handle resume policy
-        h.resume();
-    }
-
+    this->resume_handles();
+    // for (auto& h: this->handles_to_resume) {
+    //     // TODO: handle resume policy
+    //     h.resume();
+    // }
+    //
     this->handles_to_resume.clear();
 }
 
 #endif // __APPLE__
+
+template <typename ThreadPoolType>
+io_scheduler<ThreadPoolType>::io_scheduler(std::shared_ptr<ThreadPoolType> p)
+    : pool(p) {}
+
+template <typename ThreadPoolType>
+void io_scheduler<ThreadPoolType>::resume_handles() {
+    for (auto& h: this->handles_to_resume) {
+        this->pool->resume(h);
+    }
+}
+
+void io_scheduler<void>::resume_handles() {
+    for (auto& h: this->handles_to_resume) {
+        h.resume();
+    }
+}
 
 } // namespace evo

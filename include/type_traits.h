@@ -129,6 +129,8 @@ template <typename T>
 struct add_lvalue_reference<T, true> {
     typedef T& type;
 };
+template <typename T>
+using add_lvalue_reference_t = typename add_lvalue_reference<T>::type;
 
 //add rvalue reference
 template <typename T, bool = is_referenceable<T>::value>
@@ -139,6 +141,8 @@ template <typename T>
 struct add_rvalue_reference<T, true> {
     typedef T&& type;
 };
+template <typename T>
+using add_rvalue_reference_t = typename add_rvalue_reference<T>::type;
 
 //remove reference
 template <typename T>
@@ -255,6 +259,8 @@ using all = is_same<all_helper<Pred...>, all_helper<((void)Pred, true)...>>;
 //is_lvalue_reference
 template <typename T>
 struct is_lvalue_reference: bool_constant<__is_lvalue_reference(T)> {};
+template <typename T>
+constexpr bool is_lvalue_reference_v = is_lvalue_reference<T>::value;
 
 //is_rvalue_reference
 template <typename T>
@@ -325,6 +331,27 @@ struct is_array<T[N]>: true_type {};
 
 template <typename T>
 inline constexpr bool is_array_v = is_array<T>::value;
+
+//is_cv_array
+template <typename T>
+struct is_cv_array: std::false_type {};
+
+template <typename T>
+struct is_cv_array<T const[]>: std::true_type {};
+template <typename T>
+struct is_cv_array<T volatile[]>: std::true_type {};
+template <typename T>
+struct is_cv_array<T const volatile[]>: std::true_type {};
+
+template <typename T, size_t N>
+struct is_cv_array<T const[N]>: std::true_type {};
+template <typename T, size_t N>
+struct is_cv_array<T volatile[N]>: std::true_type {};
+template <typename T, size_t N>
+struct is_cv_array<T const volatile[N]>: std::true_type {};
+
+template <typename T>
+constexpr bool is_cv_array_v = is_cv_array<T>::value;
 
 //is_void
 template <typename>

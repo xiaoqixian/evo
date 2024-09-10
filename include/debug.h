@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <string>
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
@@ -23,23 +24,29 @@
 
 #else
 /* #define DEBUG(M, ...) fprintf(stderr, "\033[0;33m[DEBUG]\033[0m %s: %d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__); */
-#define DEBUG(M, ...) fprintf(stderr, YELLOW("[DEBUG]") "%s: %d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
+#define DEBUG(M, ...) fprintf(stderr, YELLOW("[DEBUG]") " %s/%d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
 #endif
 
 #define CLEAN_ERRNO() (errno == 0 ? "None" : strerror(errno))
 
-#define LOG_ERR(M, ...) fprintf(stderr, "\033[0;31m""[ERROR]" "\033[0m" " (%s: %d: errno: %s)" M "\n", __FILENAME__, __LINE__, CLEAN_ERRNO(), ##__VA_ARGS__)
+#define LOG_ERR(M, ...) fprintf(stderr, "\033[0;31m[ERROR]\033[0m %s/%d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
 
 #define LOG_WARN(M, ...) fprintf(stderr, "\033;[0;35m[WARN]\033[0m (%s: %d: errno: %s)" M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__)
 
 #define LOG_INFO(M, ...) fprintf(stderr, "\033[0;36m" "[INFO] \33[0m (%s: %d)" M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__)
 
-#define CHECK(A, M, ...) if (!(A)) { LOG_ERR(M "\n", ##__VA_ARGS__);} 
+#define CHECK(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__);} 
 
-#define CHECK_EXIT(A, M, ...) if (!(A)) { LOG_ERR(M, "\n", ##__VA_ARGS__); exit(1);} 
+#define CHECK_EXIT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
 
-#define CHECK_DEBUG(A, M, ...) if (!(A)) { DEBUG(M "\n", ##__VA_ARGS__);}
+#define CHECK_DEBUG(A, M, ...) if (!(A)) { DEBUG(M, ##__VA_ARGS__);}
 
-#define ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, "\n", ##__VA_ARGS__); exit(1);} 
+#define ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
+
+template <typename... Args>
+std::string debug(std::string M, Args... args) {
+    std::string out;
+    
+}
 
 #endif

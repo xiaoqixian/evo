@@ -9,8 +9,8 @@
 #ifndef POINTER_TRAITS_H
 #define POINTER_TRAITS_H
 
-#include "../type_traits.h"
-#include "../types.h"
+#include "type_traits.h"
+#include "types.h"
 
 namespace evo {
 

@@ -13,14 +13,58 @@ namespace evo {
 namespace concepts {
 
 // add concepts for coroutine.
-template <typename A>
-concept awaiter = requires (A a, std::coroutine_handle<> h) {
-    { a.await_ready() } -> evo::concepts::same_as<bool>;
+template <typename A, typename P = void>
+concept awaiter = requires (A a, std::coroutine_handle<P> h) {
+    { a.await_ready() } -> evo::concepts::convertible_to<bool>;
 
     a.await_suspend(h);
 
     a.await_resume();
 };
+
+template <typename A>
+concept has_co_await_op = requires (A a) {
+    { a.operator co_await() } -> awaiter;
+};
+
+#define HAS_MEMBER_FUNC_RET_AWAITER(member)\
+    template <typename A>\
+    concept has_member_##member = requires (A a) {\
+        { a.member() } -> awaiter;\
+    };
+
+#define HAS_MEMBER_FUNC(member)\
+    template <typename A>\
+    concept has_member_##member = requires (A a) {\
+        a.member();\
+    };
+
+HAS_MEMBER_FUNC_RET_AWAITER(initial_suspend)
+HAS_MEMBER_FUNC_RET_AWAITER(final_suspend)
+HAS_MEMBER_FUNC(get_return_object)
+HAS_MEMBER_FUNC(return_value)
+HAS_MEMBER_FUNC(return_void)
+HAS_MEMBER_FUNC(unhandled_exception)
+
+template <typename P>
+concept promise = 
+    has_member_get_return_object<P> &&
+    has_member_initial_suspend<P> &&
+    has_member_final_suspend<P> && (
+        has_member_return_void<P> ||
+        has_member_return_value<P>) &&
+    has_member_unhandled_exception<P>;
+
+// An awaitble type is a type satisfying the follows:
+// 1. has a public type named `promise_type` which 
+//  satisfies promise concept.
+// 
+// 2. has an overload of operator `co_await` or itself 
+//  satisfies the awaiter concept.
+template <typename A>
+concept awaitable = true;
+// concept awaitable = requires { typename A::promise_type; }
+//     && ( has_co_await_op<A> || awaiter<A>);
 
 } // namespace concepts
 

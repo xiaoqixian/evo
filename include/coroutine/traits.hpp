@@ -1,0 +1,34 @@
+// Date:   Thu Mar 14 16:16:52 2024
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#ifndef _TRAITS_HPP
+#define _TRAITS_HPP
+
+#include "coroutine/concepts.hpp"
+
+namespace evo {
+
+using evo::concepts::awaiter;
+using evo::concepts::has_co_await_op;
+
+template <typename A>
+struct awaitable_traits;
+
+template <typename A>
+    requires has_co_await_op<A>
+struct awaitable_traits<A> {
+    typedef decltype(declval<A>().operator co_await()) awaiter_type;
+    typedef decltype(declval<awaiter_type>().await_resume()) return_type;
+};
+
+template <typename A>
+    requires awaiter<A>
+struct awaitable_traits<A> {
+    typedef A awaiter_type;
+    typedef decltype(declval<awaiter_type>().await_resume()) return_type;
+};
+
+} // namespace evo
+
+#endif // _TRAITS_HPP

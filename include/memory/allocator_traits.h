@@ -9,18 +9,41 @@
 #ifndef ALLOCATOR_TRAITS_H
 #define ALLOCATOR_TRAITS_H
 
-#include "../type_traits.h"
+#include "type_traits.h"
 #include "pointer_traits.h"
-#include "../utility/forward.h"
+
+/*
+The allocator_traits class template provides the standardized way to access various properties of Allocators. The standard containers and other standard library components access allocators through this template, which makes it possible to use any class type as an allocator, as long as the user-provided specialization of std::allocator_traits implements all required functionality.
+*/
 
 namespace evo {
 
+// Macro which generates a template type NAME to detect 
+// if a type NAME has a member type named PROPERTY.
 #define TRAITS_HAS_XXX(NAME, PROPERTY)\
     template <typename, typename = void> struct NAME: evo::false_type {};\
     template <typename T> struct NAME<T, typename evo::void_t<typename T::PROPERTY>::type>: evo::true_type {};
 
+#define HAS_XXX_TYPE(NAME, PROPERTY)\
+    template <typename T>\
+    concept NAME = requires {\
+        typename T::PROPERTY;\
+    };
 
 //pointer
+// HAS_XXX_TYPE(has_pointer, pointer);
+//
+// template <typename T, typename Alloc, 
+//          typename RawAlloc = evo::remove_reference_t<Alloc>>
+// struct pointer {
+//     typedef T* type;
+// };
+//
+// template <typename T, typename Alloc, has_pointer RawAlloc>
+// struct pointer<T, Alloc, RawAlloc> {
+//     typedef typename RawAlloc::pointer type;
+// };
+
 TRAITS_HAS_XXX(has_pointer, pointer);
 template <typename, typename Alloc,
          typename RawAlloc = typename evo::remove_reference<Alloc>::type,
@@ -85,21 +108,27 @@ struct alloc_traits_difference_type<Alloc, Ptr, true> {
     typedef Alloc::difference_type type;
 };
 
-//TODO propagate_on_container_copy_assignment
-//TODO propagate_on_container_move_assignment
-//TODO propagate_on_container_swap
+// TODO propagate_on_container_copy_assignment
+// TODO propagate_on_container_move_assignment
+// TODO propagate_on_container_swap
 
-//allocator_traits rebind
+// allocator_traits rebind
+// if a type T has a template type called `rebind` 
+// and `rebind` has an inner type called `other`.
 template <typename T, typename U, typename = void>
 struct has_rebind_other: evo::false_type {};
+
 template <typename T, typename U>
 struct has_rebind_other<T, U, typename evo::void_t<
     typename T::template rebind<U>::other>::type>: evo::true_type {};
 
 template <typename T, typename U, bool = has_rebind_other<T, U>::value>
 struct allocator_traits_rebind {
+    static_assert(has_rebind_other<T, U>::value, "This allocator has to implement rebind");
+
     typedef typename T::template rebind<U>::other type;
 };
+
 template <template <typename, typename...> typename Alloc, typename T, typename... Args, typename U>
 struct allocator_traits_rebind<Alloc<T, Args...>, U, true> {
     typedef typename Alloc<T, Args...>::template rebind<U>::other type;
@@ -199,17 +228,17 @@ struct allocator_traits {
         return a.deallocate(p, n);
     }
 
-    //allocator construct with a pointer
+    // allocator construct at ptr.
     template <typename T, typename... Args, typename = evo::enable_if<
         has_construct<alloc_type, T*, Args...>::value>>
     inline constexpr static void construct(alloc_type& a, T* p, Args&&... args) {
         a.construct(p, evo::forward<Args>(args)...);
     }
 
-    //construct T at a specific address. 
+    // allocator with no `construct` method uses `new` at ptr.
     template <typename T, typename... Args, typename = void, typename = evo::enable_if<!has_construct<alloc_type, T*, Args...>::value>>
     inline constexpr static void construct(alloc_type&, T* p, Args&&... args) {
-        new ((void*)p) T(evo::forward<Args>(args)...);
+        ::new ((void*)p) T(evo::forward<Args>(args)...);
     }
 
     //destroy

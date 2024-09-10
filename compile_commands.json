@@ -1,7 +1,13 @@
 [
 {
   "directory": "/Users/lunar/pros/evo",
-  "command": "/usr/local/opt/llvm/bin/clang++  -I/Users/lunar/pros/evo/include -std=gnu++20 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -o CMakeFiles/out.dir/test/test1.cpp.o -c /Users/lunar/pros/evo/test/test1.cpp",
+  "command": "/usr/local/opt/llvm/bin/clang++ -Devo_EXPORTS -I/Users/lunar/pros/evo/evo -I/Users/lunar/pros/evo/PUBLIC -I/Users/lunar/pros/evo/include -std=gnu++20 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -fPIC -o CMakeFiles/evo.dir/src/coroutine/io_scheduler.cpp.o -c /Users/lunar/pros/evo/src/coroutine/io_scheduler.cpp",
+  "file": "/Users/lunar/pros/evo/src/coroutine/io_scheduler.cpp",
+  "output": "CMakeFiles/evo.dir/src/coroutine/io_scheduler.cpp.o"
+},
+{
+  "directory": "/Users/lunar/pros/evo",
+  "command": "/usr/local/opt/llvm/bin/clang++  -I/Users/lunar/pros/evo/evo -I/Users/lunar/pros/evo/PUBLIC -I/Users/lunar/pros/evo/include -std=gnu++20 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk -o CMakeFiles/out.dir/test/test1.cpp.o -c /Users/lunar/pros/evo/test/test1.cpp",
   "file": "/Users/lunar/pros/evo/test/test1.cpp",
   "output": "CMakeFiles/out.dir/test/test1.cpp.o"
 }

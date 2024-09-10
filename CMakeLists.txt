@@ -11,7 +11,7 @@ file(GLOB evo_src "src/*.cpp")
 file(GLOB evo_coro_src "src/coroutine/*.cpp")
 add_library(evo SHARED ${evo_src} ${evo_coro_src})
 
-target_include_directories(evo PUBLIC include)
+include_directories(evo PUBLIC include)
 # target_include_directories(evo INTERFACE include ${libevent_path}/include)
 # target_include_directories(evo INTERFACE include ${libev_path}/include)
 

@@ -1,2 +1,12 @@
 build
 .cache
+std-stl
+std-stl-src
+.DS_Store
+out
+*.dylib
+stl
+CMakeFiles
+CMakeCache.txt
+.gdb_history
+.cmake

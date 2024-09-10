@@ -81,6 +81,11 @@ public:
         static_thread_pool& pool;
     };
 
+    // use hardware_concurrency by default
+    static_thread_pool(): 
+      evo::static_thread_pool(
+        std::thread::hardware_concurrency()) {}
+
     static_thread_pool(const size_t size) {
         this->threads.reserve(size);
 

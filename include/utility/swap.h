@@ -26,9 +26,9 @@ inline swap_result_t<T> swap(T& x, T& y)
 
 //swap for array
 template <typename T, size_t N>
-inline typename evo::enable_if<evo::is_swappable<T>::value>::type swap(T& a[N], T& b[N]) {
+inline typename evo::enable_if<evo::is_swappable<T>::value>::type swap(T (&a) [N], T (&b) [N]) {
     for (size_t i = 0; i < N; i++) {
-        swap(a[i]], b[i]);
+        swap(a[i], b[i]);
     }
 }
 
