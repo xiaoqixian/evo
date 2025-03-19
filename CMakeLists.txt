@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 project(evo)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_COMPILER /usr/bin/clang++-18)
 
 set(EVO_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(EVO_THIRD_PARTY_INCLUDE_DIR

@@ -1,0 +1,131 @@
+// -*- C++ -*-
+// Date:   Sat Mar 02 17:06:30 2024
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#ifndef _GENERATOR_H
+#define _GENERATOR_H
+
+#include <exception>
+#include <coroutine>
+
+#include "concepts.h"
+
+namespace evo {
+
+template <typename T>
+class Generator {
+public:
+    struct promise_type;
+
+    typedef std::coroutine_handle<promise_type> handle_t;
+    typedef T value_type;
+
+    handle_t coro_handle;
+
+    Generator(handle_t h): coro_handle(h) {}
+
+    struct promise_type {
+        typedef T value_type;
+        value_type value;
+        std::exception_ptr except_ptr;
+
+        auto get_return_object() {
+            return Generator {
+                handle_t::from_promise(*this)
+            };
+        }
+
+        auto initial_suspend() {
+            return std::suspend_always();
+        }
+
+        auto final_suspend() noexcept {
+            return std::suspend_always();
+        }
+
+        void return_value(value_type value) {
+            this->value = value;
+        }
+
+        auto yield_value(value_type value) {
+            this->value = value;
+            return std::suspend_always();
+        }
+
+        void unhandled_exception() {
+            this->except_ptr = std::current_exception();
+        }
+    };
+    
+    inline bool await_ready() const noexcept {
+        return true;
+    }
+
+    inline void await_suspend(auto) noexcept {}
+
+    inline value_type await_resume() noexcept {
+        return this->coro_handle.promise().value;
+    }
+
+    inline value_type operator()() {
+        this->coro_handle.resume();
+        return this->coro_handle.promise().value;
+    }
+
+    inline operator bool() const {
+        return !this->coro_handle.done();
+    }
+};
+
+template <>
+class Generator<void> {
+    struct promise_type;
+
+    typedef std::coroutine_handle<promise_type> handle_t;
+
+    handle_t coro_handle;
+
+    Generator(handle_t h): coro_handle(h) {}
+
+    struct promise_type {
+        auto get_return_object() {
+            return Generator<void> {
+                handle_t::from_promise(*this)
+            };
+        }
+
+        auto initial_suspend() {
+            return std::suspend_always();
+        }
+
+        auto final_suspend() noexcept {
+            return std::suspend_always();
+        }
+
+        void return_void() noexcept {}
+
+        void unhandled_exception() {
+            this->except_ptr = std::current_exception();
+        }
+
+        std::exception_ptr except_ptr;
+    };
+
+    inline bool await_ready() const noexcept {
+        return true;
+    }
+
+    inline void await_suspend(auto) noexcept {}
+
+    inline void await_resume() noexcept {}
+
+    inline operator bool() const {
+        return !this->coro_handle.done();
+    }
+};
+
+
+}
+
+#endif // _GENERATOR_H

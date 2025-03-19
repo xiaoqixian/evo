@@ -1,0 +1,153 @@
+// -*- C++ -*-
+// Date:   Mon Mar 11 14:36:15 2024
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#ifndef _STATIC_THREAD_POOL_HPP
+#define _STATIC_THREAD_POOL_HPP
+
+#include "coroutine/task.hpp"
+#include <coroutine>
+#include <mutex>
+#include <condition_variable>
+#include <type_traits>
+#include <queue>
+#include <thread>
+
+namespace evo {
+
+class static_thread_pool {
+    typedef std::coroutine_handle<> handle_t;
+
+    struct queue_entry {
+        handle_t handle;
+    };
+
+    std::queue<queue_entry> q;
+    std::mutex queue_lock;
+    std::condition_variable_any cv;
+    std::atomic_bool shutdown_requested;
+    std::atomic_size_t handle_num;
+    std::vector<std::thread> threads;
+
+    void thread_runner(const size_t) {
+        while (!this->shutdown_requested.load(std::memory_order_acquire) ||
+                this->handle_num.load(std::memory_order_acquire) > 0) 
+        {
+            std::unique_lock<std::mutex> lk(this->queue_lock);
+            // if the Predicate returns true, the condition_variable 
+            // stops waiting.
+            this->cv.wait(lk, [&]() {
+                return this->handle_num.load(std::memory_order_acquire) > 0 ||
+                    this->shutdown_requested.load(std::memory_order_acquire);
+            });
+
+            // now the lock is acquired by the thread,
+            // we can safely manipulate the queue.
+            while (!this->q.empty()) {
+                auto entry = q.front();
+                this->q.pop();
+
+                this->handle_num.fetch_sub(1, std::memory_order_release);
+
+                // unlock to allow other threads use queue.
+                lk.unlock();
+                
+                entry.handle.resume();
+
+                // now we need to acquire lock again before
+                // manipulating the queue.
+                lk.lock();
+            }
+        }
+    }
+
+public:
+    struct awaiter {
+        awaiter(static_thread_pool& pool): pool(pool) {}
+
+        constexpr inline 
+        bool await_ready() const noexcept {
+            return false;
+        }
+
+        void await_suspend(std::coroutine_handle<> h) noexcept {
+            this->pool.resume_handle(h);
+        }
+
+        void await_resume() const noexcept {}
+
+    private:
+        friend class static_thread_pool;
+        static_thread_pool& pool;
+    };
+
+    // use hardware_concurrency by default
+    static_thread_pool(): 
+      evo::static_thread_pool(
+        std::thread::hardware_concurrency()) {}
+
+    static_thread_pool(const size_t size) {
+        this->threads.reserve(size);
+
+        for (size_t i = 0; i < size; i++) {
+            this->threads.emplace_back([this, i]() {
+                this->thread_runner(i);
+            });
+        }
+    }
+
+    void shutdown() noexcept {
+       if (!this->shutdown_requested.exchange(true, std::memory_order_acq_rel)) {
+           {
+            std::scoped_lock lk(this->queue_lock);
+            this->cv.notify_all();
+           }
+
+           for (auto& thd: this->threads) {
+               if (thd.joinable())
+                   thd.join();
+           }
+       }
+    }
+
+    ~static_thread_pool() {
+        this->shutdown();
+    }
+
+    // resume a coroutine_handle on the thread pool.
+    void resume_handle(std::coroutine_handle<> h) noexcept {
+        if (h == nullptr) return;
+
+        {
+            std::scoped_lock lk(this->queue_lock);
+            this->q.emplace(h);
+        }
+
+        this->cv.notify_one();
+    }
+
+    awaiter schedule() noexcept {
+        return awaiter(*this);
+    }
+
+    template <typename F, typename... Args>
+    evo::task<std::invoke_result_t<F, Args...>>
+    schedule(F&& f, Args&&... args) {
+        // co_await to make the coroutine resumed 
+        // on another thread which belongs to the 
+        // thread pool.
+        co_await this->schedule();
+
+        if constexpr (std::is_same_v<void, std::invoke_result_t<F, Args...>>) {
+            f(std::forward<Args>(args)...);
+            co_return;
+        } else {
+            co_return f(std::forward<Args>(args)...);
+        }
+    }
+};
+
+} // namespace evo
+
+#endif // _STATIC_THREAD_POOL_HPP
