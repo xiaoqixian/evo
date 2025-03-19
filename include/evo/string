@@ -1,0 +1,113 @@
+// -*- C++ -*-
+// Date:   Tue Mar 18 09:55:20 AM 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#include "evo/memory/compressed_pair.hpp"
+#include "types.h"
+#include <memory>
+#include <cstring>
+#include "evo/memory/allocator.h"
+
+namespace evo {
+
+template <typename Alloc>
+class basic_string {
+public:
+  using value_type      = char;
+  using size_type       = size_t;
+  using difference_type = size_t;
+  using reference       = char&;
+  using const_reference = char const&;
+  using pointer         = char*;
+  using const_pointer   = char const*;
+  using iterator        = char*;
+  using const_iterator  = char const*;
+  using allocator_type  = Alloc;
+  using alloc_traits    = std::allocator_traits<allocator_type>;
+private:
+  static constexpr size_t _alignment = 8;
+  allocator_type allocator_;
+
+  struct long_str {
+    struct __attribute__((packed)) {
+      size_type is_long_: 1;
+      size_type cap_: sizeof(size_type) * 8 - 1;
+    };
+    size_type size_;
+    pointer data_;
+  };
+
+  static constexpr size_type MIN_CAP = (sizeof(long_str) - 1) / sizeof(value_type) > 2 ? 
+    (sizeof(long_str) - 1) / sizeof(value_type) : 2;
+
+  struct short_str {
+    struct __attribute__((packed)) {
+      size_type is_long_: 1;
+      size_type cap_: 7;
+    };
+    char padding_[sizeof(value_type) - 1];
+    value_type data_[MIN_CAP];
+  };
+
+  union rep {
+    long_str l_str_;
+    short_str s_str_;
+  };
+
+  evo::compressed_pair<rep, allocator_type> meta_;
+  
+  inline static void _copy(char* dst, char const* src, size_type size) {
+    std::memcpy(dst, src, size);
+  }
+
+  bool _is_long() const noexcept {
+    return meta_.first().s_str_.is_long_;
+  }
+
+  constexpr static bool _fits_sso(size_t n) noexcept {
+    return n < MIN_CAP;
+  }
+
+  constexpr allocator_type& _alloc() const noexcept {
+    return meta_.second();
+  }
+public:
+  constexpr basic_string() noexcept = default;
+  constexpr basic_string(size_t n) noexcept {
+    if (_fits_sso(n)) {
+      meta_.first().s_str.is_long_ = false;
+      meta_.first().s_str.cap_ = MIN_CAP;
+    } else {
+      meta_.first().l_str.is_long_ = true;
+      meta_.first().l_str.cap_ = n;
+    }
+  }
+
+  constexpr basic_string(char const* str) noexcept {
+    size_type const len = std::strlen(str);
+    
+    if (_fits_sso(len)) {
+      meta_.first().s_str.is_long_ = false;
+      meta_.first().s_str.size_ = len;
+      std::memcpy(meta_.first().s_str.data_, str, len);
+    } else {
+      meta_.first().s_str.is_long_ = true;
+      meta_.first().s_str.size_ = len;
+    }
+  }
+
+  size_type max_size() const noexcept {
+    size_type const ms = alloc_traits::max_size(_alloc());
+    if (ms <= std::numeric_limits<size_type>::max() / 2) {
+      return ms - _alignment;
+    } else {
+      bool const uses_lsb = std::endian::native == std::endian::little;
+      return uses_lsb ? ms - _alignment : (ms / 2) - _alignment;
+    }
+  }
+};
+
+using string = basic_string<allocator<char>>;
+
+} // namespace evo

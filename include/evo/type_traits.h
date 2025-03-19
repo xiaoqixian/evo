@@ -48,6 +48,8 @@ struct is_same<T, T>: true_type {};
 
 template <typename T, typename U>
 inline constexpr bool is_same_v = is_same<T, U>::value;
+template <typename T, typename U>
+inline constexpr bool is_not_same_v = !is_same<T, U>::value;
 
 // And trait, inherit true_type if all type parameters 
 // are true_type, otherwise inherit false_type.
@@ -258,13 +260,13 @@ using all = is_same<all_helper<Pred...>, all_helper<((void)Pred, true)...>>;
 
 //is_lvalue_reference
 template <typename T>
-struct is_lvalue_reference: bool_constant<__is_lvalue_reference(T)> {};
+struct is_lvalue_reference: bool_constant<std::is_lvalue_reference_v<T>> {};
 template <typename T>
 constexpr bool is_lvalue_reference_v = is_lvalue_reference<T>::value;
 
 //is_rvalue_reference
 template <typename T>
-struct is_rvalue_reference: bool_constant<__is_rvalue_reference(T)> {};
+struct is_rvalue_reference: bool_constant<std::is_rvalue_reference_v<T>> {};
 
 //make_integer_sequence
 template <size_t... values>
@@ -448,9 +450,9 @@ struct is_object: bool_constant<
 // ------- constructible --------------------------------------
 
 // TODO: without is_constructible feature version
-#if __has_feature(is_constructible)
+// #if __has_feature(is_constructible)
 template <typename T, typename... Args>
-struct is_constructible: bool_constant<__is_constructible(T, Args...)> {};
+struct is_constructible: bool_constant<std::is_constructible_v<T, Args...>> {};
 template <typename T, typename... Args>
 inline constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
 
@@ -462,7 +464,7 @@ constexpr bool is_default_constructible_v = is_default_constructible<T>::value;
 
 //is_nothrow_constructible
 template <typename T, typename... Args>
-struct is_nothrow_constructible: public bool_constant<__is_nothrow_constructible(T, Args...)> {};
+struct is_nothrow_constructible: public bool_constant<std::is_nothrow_constructible_v<T, Args...>> {};
 template <typename T, typename... Args>
 constexpr bool is_nothrow_constructible_v = is_nothrow_constructible<T, Args...>::value;
 
@@ -533,18 +535,18 @@ struct is_trivially_move_constructible: is_trivially_constructible<T, typename a
 template <typename T>
 constexpr bool is_trivially_move_constructible_v = is_trivially_move_constructible<T>::value;
 
-#endif // #if __has_feature(is_constructible)
+// #endif // #if __has_feature(is_constructible)
 
 
-#if __has_feature(__is_destructible)
-
-template <typename T>
-using is_destructible = bool_constant<__is_destructible(T)>;
+// #if __has_feature(__is_destructible)
 
 template <typename T>
-using is_destructible_v = bool_constant<__is_destructible(T)>::value;
+using is_destructible = bool_constant<std::is_destructible_v<T>>;
 
-#endif // #if __has_keyword(is_destructible)
+template <typename T>
+using is_destructible_v = bool_constant<std::is_destructible_v<T>>::value;
+
+// #endif // #if __has_keyword(is_destructible)
 
 //is_trivially_destructible
 template <typename T>
@@ -600,13 +602,13 @@ inline constexpr bool is_convertible_v = is_convertible<From, To>::value;
 
 //is_assignable
 template <typename T, typename U>
-struct is_assignable: bool_constant<__is_assignable(T, U)> {};
+struct is_assignable: bool_constant<std::is_assignable_v<T, U>> {};
 template <typename T, typename U>
 constexpr bool is_assignable_v = is_assignable<T, U>::value;
 
 //is_nothrow_assignable
 template <typename T, typename Arg>
-struct is_nothrow_assignable: public bool_constant<__is_nothrow_assignable(T, Arg)> {};
+struct is_nothrow_assignable: public bool_constant<std::is_nothrow_assignable_v<T, Arg>> {};
 
 //is_move_assignable
 template <typename T>

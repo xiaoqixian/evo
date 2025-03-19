@@ -9,8 +9,8 @@
 #ifndef ALLOCATOR_TRAITS_H
 #define ALLOCATOR_TRAITS_H
 
-#include "type_traits.h"
-#include "pointer_traits.h"
+#include "evo/type_traits.h"
+#include "evo/memory/pointer_traits.h"
 
 /*
 The allocator_traits class template provides the standardized way to access various properties of Allocators. The standard containers and other standard library components access allocators through this template, which makes it possible to use any class type as an allocator, as long as the user-provided specialization of std::allocator_traits implements all required functionality.

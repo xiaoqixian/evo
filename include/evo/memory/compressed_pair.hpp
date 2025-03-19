@@ -5,7 +5,7 @@
 #ifndef _COMPRESSED_PAIR_HPP
 #define _COMPRESSED_PAIR_HPP
 
-#include "type_traits.h"
+#include "evo/type_traits.h"
 #include <type_traits>
 #include <utility>
 
@@ -21,7 +21,8 @@ struct compressed_pair_elem {
     typedef T const& const_reference;
 
     template <typename U>
-    requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
+    // requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
+    requires evo::is_not_same_v<compressed_pair_elem, evo::decay<U>>
     explicit compressed_pair_elem(U&& u):
         value(evo::forward<U>(u)) {}
 
@@ -49,7 +50,8 @@ struct compressed_pair_elem<T, I, true>: public T {
     constexpr explicit compressed_pair_elem() = default;
 
     template <typename U>
-    requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
+    // requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
+    requires evo::is_not_same_v<compressed_pair_elem, evo::decay<U>>
     explicit compressed_pair_elem(U&& u):
         value_type(evo::forward<U>(u)) {}
 
