@@ -6,8 +6,9 @@
 #ifndef _REFERENCE_WRAPPER_H
 #define _REFERENCE_WRAPPER_H
 
-#include "type_traits.h"
-#include "utility/declval.h"
+#include <type_traits>
+#include "evo/type_traits"
+#include "evo/_utility/declval"
 
 namespace evo {
 
@@ -42,7 +43,7 @@ public:
 
     /// invokable reference
     template <typename... Args>
-    typename invoke_of<type, Args...>::type
+    typename std::invoke_result_t<type, Args...>
     operator() (Args... args) const {
         return invoke(get(), forward<Args>(declval<Args>())...);
     }

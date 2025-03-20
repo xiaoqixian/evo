@@ -12,8 +12,7 @@
 #include <variant>
 #include <stdexcept>
 
-#include "concepts.h"
-#include "type_traits.h"
+#include "evo/type_traits"
 
 namespace evo {
 

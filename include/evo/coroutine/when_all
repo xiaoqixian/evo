@@ -10,9 +10,9 @@
 #include <memory>
 #include <tuple>
 
-#include "coroutine/promise_base.hpp"
-#include "coroutine/traits.hpp"
-#include "debug.h"
+#include "evo/coroutine/promise_base"
+#include "evo/coroutine/traits"
+#include "evo/debug"
 
 namespace evo {
 

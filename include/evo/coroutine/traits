@@ -6,7 +6,7 @@
 #ifndef _TRAITS_HPP
 #define _TRAITS_HPP
 
-#include "coroutine/concepts.hpp"
+#include "evo/coroutine/concepts"
 
 namespace evo {
 

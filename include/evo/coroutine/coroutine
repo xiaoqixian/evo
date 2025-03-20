@@ -6,8 +6,7 @@
 #ifndef _COROUTINE_H
 #define _COROUTINE_H
 
-#include "type_traits.h"
-#include <cstddef>
+#include "evo/type_traits"
 
 namespace evo {
 

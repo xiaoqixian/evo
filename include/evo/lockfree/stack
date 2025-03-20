@@ -8,7 +8,7 @@
 
 /// A lock-free stack
 #include <atomic>
-#include "concepts.h"
+#include "evo/concepts"
 
 namespace evo {
 
@@ -21,11 +21,11 @@ class lockfree_stack {
         U data;
         node<U>* next;
         node(U const& u)
-            requires evo::copy_constructible<U>
+            requires evo::concepts::copy_constructible<U>
             : data(u), next(nullptr) {}
 
         node(U&& u)
-            requires evo::move_constructible<U>
+            requires evo::concepts::move_constructible<U>
             : data(u), next(nullptr) {}
     };
 

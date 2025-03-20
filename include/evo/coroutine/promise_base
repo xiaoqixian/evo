@@ -11,6 +11,8 @@
 #include <optional>
 #include <type_traits>
 #include <variant>
+#include <stdexcept>
+
 namespace evo {
 
 namespace promise_base_impl {

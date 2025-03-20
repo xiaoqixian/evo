@@ -7,16 +7,16 @@
 #define _IO_SCHEDULER_H
 
 #include <chrono>
-#include <sys/event.h>
 #include <vector>
 #include <coroutine>
 
-#include "task.hpp"
+#include "evo/coroutine/task"
 
 namespace evo {
 
 #ifdef __APPLE__
 
+#include <sys/event.h>
 enum class poll_op {
     READ = EVFILT_READ,
     WRITE = EVFILT_WRITE,
@@ -24,7 +24,7 @@ enum class poll_op {
 };
 
 #else
-
+#include <sys/epoll.h>
 enum class poll_op {
     READ = EPOLLIN,
     WRITE = EPOLLOUT,
