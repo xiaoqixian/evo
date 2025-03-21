@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <cstring>
+#include <stdexcept>
 #include "evo/memory/allocator"
 
 namespace evo {
@@ -29,7 +30,6 @@ public:
   using alloc_traits    = std::allocator_traits<allocator_type>;
 private:
   static constexpr size_t _alignment = 8;
-  allocator_type allocator_;
 
   struct long_str {
     struct __attribute__((packed)) {
@@ -41,12 +41,12 @@ private:
   };
 
   static constexpr size_type MIN_CAP = (sizeof(long_str) - 1) / sizeof(value_type) > 2 ? 
-    (sizeof(long_str) - 1) / sizeof(value_type) : 2;
+      (sizeof(long_str) - 1) / sizeof(value_type) : 2;
 
   struct short_str {
     struct __attribute__((packed)) {
       size_type is_long_: 1;
-      size_type cap_: 7;
+      size_type size_: 7;
     };
     char padding_[sizeof(value_type) - 1];
     value_type data_[MIN_CAP];
@@ -57,6 +57,8 @@ private:
     short_str s_str_;
   };
 
+  static_assert(evo::is_default_constructible_v<rep>, "");
+  static_assert(evo::is_default_constructible_v<allocator_type>, "");
   evo::compressed_pair<rep, allocator_type> meta_;
   
   inline static void _copy(char* dst, char const* src, size_type size) {
@@ -71,32 +73,28 @@ private:
     return n < MIN_CAP;
   }
 
-  constexpr allocator_type& _alloc() const noexcept {
+  constexpr allocator_type& _alloc() noexcept {
     return meta_.second();
   }
-public:
-  constexpr basic_string() noexcept = default;
-  constexpr basic_string(size_t n) noexcept {
-    if (_fits_sso(n)) {
-      meta_.first().s_str.is_long_ = false;
-      meta_.first().s_str.cap_ = MIN_CAP;
-    } else {
-      meta_.first().l_str.is_long_ = true;
-      meta_.first().l_str.cap_ = n;
-    }
+
+  constexpr allocator_type const& _alloc() const noexcept {
+    return meta_.second();
   }
 
-  constexpr basic_string(char const* str) noexcept {
-    size_type const len = std::strlen(str);
-    
-    if (_fits_sso(len)) {
-      meta_.first().s_str.is_long_ = false;
-      meta_.first().s_str.size_ = len;
-      std::memcpy(meta_.first().s_str.data_, str, len);
-    } else {
-      meta_.first().s_str.is_long_ = true;
-      meta_.first().s_str.size_ = len;
-    }
+  void _init(char const* s, size_type size, size_type reserve);
+  void _init(char const* s, size_type size);
+  void _init(char c, size_t n);
+
+  void _throw_length_error() {
+    throw std::runtime_error("string length error");
+  }
+public:
+  constexpr basic_string() noexcept
+    : meta_(cmp_pair_ns::value_init_tag(), cmp_pair_ns::default_init_tag())
+  {}
+
+  constexpr basic_string(char const* str) {
+    _init(str, std::strlen(str));
   }
 
   size_type max_size() const noexcept {
@@ -108,7 +106,41 @@ public:
       return uses_lsb ? ms - _alignment : (ms / 2) - _alignment;
     }
   }
+
+  constexpr char const* c_str() const noexcept {
+    if (meta_.first().s_str_.is_long_) {
+      return meta_.first().l_str_.data_;
+    }
+    else {
+      return meta_.first().s_str_.data_;
+    }
+  }
 };
+
+template <typename Alloc>
+void basic_string<Alloc>::_init(char const* s, size_type size) {
+  if (size > max_size()) {
+    _throw_length_error();
+  }
+
+  char* p = nullptr;
+  if (_fits_sso(size)) {
+    meta_.first().s_str_.is_long_ = false;
+    meta_.first().s_str_.size_    = size;
+    p                             = &meta_.first().s_str_.data_[0];
+  }
+  else {
+    p = std::allocator_traits<allocator_type>::allocate(_alloc(), size);
+    meta_.first().l_str_.is_long_ = false;
+    meta_.first().l_str_.cap_     = size;
+    meta_.first().l_str_.size_    = size;
+    meta_.first().l_str_.data_    = p;
+  }
+
+  _copy(p, s, size);
+  // put end of the str
+  p[size] = '\0';
+}
 
 using string = basic_string<allocator<char>>;
 

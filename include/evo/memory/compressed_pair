@@ -3,8 +3,7 @@
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
-#ifndef _COMPRESSED_PAIR_HPP
-#define _COMPRESSED_PAIR_HPP
+#pragma once
 
 #include "evo/type_traits"
 #include <type_traits>
@@ -15,28 +14,35 @@ namespace evo {
 template <typename T1, typename T2>
 struct compressed_pair;
 
+namespace cmp_pair_ns {
+  struct default_init_tag {};
+  struct value_init_tag {};
+} // namespace compressed_pair
+
 template <typename T, size_t I, bool CanBeEmptyBase = 
-    std::is_empty_v<T> && !std::is_final_v<T>>
+  std::is_empty_v<T> && !std::is_final_v<T>>
 struct compressed_pair_elem {
-    typedef T& reference;
-    typedef T const& const_reference;
+  typedef T& reference;
+  typedef T const& const_reference;
 
-    template <typename U>
-    // requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
-    requires evo::is_not_same_v<compressed_pair_elem, evo::decay<U>>
-    explicit compressed_pair_elem(U&& u):
-        value(evo::forward<U>(u)) {}
+  constexpr explicit compressed_pair_elem(cmp_pair_ns::default_init_tag) {}
+  constexpr explicit compressed_pair_elem(cmp_pair_ns::value_init_tag): value_() {}
 
-    reference get() noexcept {
-        return this->value;
-    }
+  template <typename U>
+  requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
+  explicit compressed_pair_elem(U&& u):
+    value_(evo::forward<U>(u)) {}
 
-    const_reference get() const noexcept {
-        return this->value;
-    }
+  reference get() noexcept {
+    return value_;
+  }
+
+  const_reference get() const noexcept {
+    return value_;
+  }
 
 private:
-    T value;
+  T value_;
 };
 
 // Empty Base Optimization
@@ -44,86 +50,89 @@ private:
 // put inside the compressed_pair_elem.
 template <typename T, size_t I>
 struct compressed_pair_elem<T, I, true>: public T {
-    typedef T value_type;
-    typedef T& reference;
-    typedef T const& const_reference;
+  typedef T value_type;
+  typedef T& reference;
+  typedef T const& const_reference;
 
-    constexpr explicit compressed_pair_elem() = default;
+  constexpr explicit compressed_pair_elem() = default;
+  constexpr explicit compressed_pair_elem(cmp_pair_ns::default_init_tag) {}
+  constexpr explicit compressed_pair_elem(cmp_pair_ns::value_init_tag): value_type() {}
 
-    template <typename U>
-    // requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
-    requires evo::is_not_same_v<compressed_pair_elem, evo::decay<U>>
-    explicit compressed_pair_elem(U&& u):
-        value_type(evo::forward<U>(u)) {}
+  template <typename U>
+  // requires (!evo::is_same_v<compressed_pair_elem, evo::decay<U>>)
+  requires evo::is_not_same_v<compressed_pair_elem, evo::decay<U>>
+  explicit compressed_pair_elem(U&& u):
+    value_type(evo::forward<U>(u)) {}
 
-    reference get() noexcept {
-        return *this; // implicit conversion to the base reference.
-    }
+  reference get() noexcept {
+    return *this; // implicit conversion to the base reference.
+  }
 
-    const_reference get() const noexcept {
-        return *this;
-    }
+  const_reference get() const noexcept {
+    return *this;
+  }
 };
 
 template <typename T1, typename T2>
 struct compressed_pair: 
-    compressed_pair_elem<T1, 1>,
-    compressed_pair_elem<T2, 2> 
+  compressed_pair_elem<T1, 1>,
+  compressed_pair_elem<T2, 2> 
 {
-    static_assert((!is_same<T1, T2>::value),
-            "compressed_pair cannot be instantiated when T1 and T2 are the same type; ");
+  static_assert((!is_same<T1, T2>::value),
+      "compressed_pair cannot be instantiated when T1 and T2 are the same type; ");
 
-    typedef compressed_pair_elem<T1, 1> Base1;
-    typedef compressed_pair_elem<T2, 2> Base2;
+  typedef compressed_pair_elem<T1, 1> Base1;
+  typedef compressed_pair_elem<T2, 2> Base2;
 
-    explicit compressed_pair()
-    requires (
-        evo::is_default_constructible_v<T1> &&
-        evo::is_default_constructible_v<T2>
-    ) = default;
+  explicit compressed_pair()
+  requires (
+    evo::is_default_constructible_v<T1> &&
+    evo::is_default_constructible_v<T2>
+  )
+    : Base1(cmp_pair_ns::value_init_tag()),
+      Base2(cmp_pair_ns::value_init_tag())
+  {}
 
-    template <typename U1, typename U2>
-    requires (
-        evo::is_constructible_v<T1, U1> && 
-        evo::is_constructible_v<T2, U2>
-    )
-    explicit compressed_pair(U1&& u1, U2&& u2):
-        Base1(std::forward<U1>(u1)), 
-        Base2(std::forward<U2>(u2)) {}
+  template <typename U1, typename U2>
+  // requires (
+  //   evo::is_constructible_v<T1, U1> && 
+  //   evo::is_constructible_v<T2, U2>
+  // )
+  explicit compressed_pair(U1&& u1, U2&& u2):
+    Base1(std::forward<U1>(u1)), 
+    Base2(std::forward<U2>(u2)) {}
 
-    typename Base1::reference first() noexcept {
-        return static_cast<Base1&>(*this).get();
-    }
-    typename Base1::const_reference first() const noexcept {
-        return static_cast<Base1 const&>(*this).get();
-    }
+  typename Base1::reference first() noexcept {
+    return static_cast<Base1&>(*this).get();
+  }
+  typename Base1::const_reference first() const noexcept {
+    return static_cast<Base1 const&>(*this).get();
+  }
 
-    typename Base2::reference second() noexcept {
-        return static_cast<Base2&>(*this).get();
-    }
-    typename Base2::const_reference second() const noexcept {
-        return static_cast<Base2 const&>(*this).get();
-    }
+  typename Base2::reference second() noexcept {
+    return static_cast<Base2&>(*this).get();
+  }
+  typename Base2::const_reference second() const noexcept {
+    return static_cast<Base2 const&>(*this).get();
+  }
 
-    static Base1* get_first_base(compressed_pair* p) noexcept {
-        return static_cast<Base1*>(p);
-    }
-    static Base2* get_second_base(compressed_pair* p) noexcept {
-        return static_cast<Base2*>(p);
-    }
+  static Base1* get_first_base(compressed_pair* p) noexcept {
+    return static_cast<Base1*>(p);
+  }
+  static Base2* get_second_base(compressed_pair* p) noexcept {
+    return static_cast<Base2*>(p);
+  }
 
-    void swap(compressed_pair& other) {
-        evo::swap(first(), other.first());
-        evo::swap(second(), other.second());
-    }
+  void swap(compressed_pair& other) {
+    evo::swap(first(), other.first());
+    evo::swap(second(), other.second());
+  }
 };
 
 template <typename T1, typename T2>
 void swap(compressed_pair<T1, T2>& p1, compressed_pair<T1, T2>& p2) {
-    evo::swap(p1.first(), p2.first());
-    evo::swap(p1.second(), p2.second());
+  evo::swap(p1.first(), p2.first());
+  evo::swap(p1.second(), p2.second());
 }
 
 } // namespace evo
-
-#endif // _COMPRESSED_PAIR_HPP
