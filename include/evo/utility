@@ -1,3 +1,8 @@
+// -*- C++ -*-
+// Date:   Fri Mar 21 12:04:24 PM 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
 #pragma once
 
 #include "evo/types"
@@ -5,13 +10,13 @@
 namespace evo {
 
 struct in_place_t {
-    explicit in_place_t() = default;
+  explicit in_place_t() = default;
 };
 constexpr in_place_t in_place {};
 
 template <size_t N>
 struct in_place_index_t {
-    explicit in_place_index_t() = default;
+  explicit in_place_index_t() = default;
 };
 
 template <size_t N>

@@ -3,3 +3,4 @@
 # Author: https://github.com/xiaoqixian
 
 add_subdirectory(fmt)
+add_subdirectory(googletest)

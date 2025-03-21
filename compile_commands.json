@@ -1,17 +1,38 @@
 [
 {
   "directory": "/home/lunar/pros/evo/build",
-  "command": "/usr/bin/c++  -Devo_EXPORTS -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include  -fPIC   -std=gnu++2a -o CMakeFiles/evo.dir/src/coroutine/io_scheduler.cpp.o -c /home/lunar/pros/evo/src/coroutine/io_scheduler.cpp",
-  "file": "/home/lunar/pros/evo/src/coroutine/io_scheduler.cpp"
+  "command": "/usr/bin/c++ -Devo_EXPORTS -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include -std=gnu++2a -fPIC -o CMakeFiles/evo.dir/src/string.cpp.o -c /home/lunar/pros/evo/src/string.cpp",
+  "file": "/home/lunar/pros/evo/src/string.cpp",
+  "output": "CMakeFiles/evo.dir/src/string.cpp.o"
+},
+{
+  "directory": "/home/lunar/pros/evo/build",
+  "command": "/usr/bin/c++ -Devo_EXPORTS -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include -std=gnu++2a -fPIC -o CMakeFiles/evo.dir/src/coroutine/io_scheduler.cpp.o -c /home/lunar/pros/evo/src/coroutine/io_scheduler.cpp",
+  "file": "/home/lunar/pros/evo/src/coroutine/io_scheduler.cpp",
+  "output": "CMakeFiles/evo.dir/src/coroutine/io_scheduler.cpp.o"
 },
 {
   "directory": "/home/lunar/pros/evo/build/third_party/fmt",
-  "command": "/usr/bin/c++   -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include    -std=gnu++2a -o CMakeFiles/fmt.dir/src/format.cc.o -c /home/lunar/pros/evo/third_party/fmt/src/format.cc",
-  "file": "/home/lunar/pros/evo/third_party/fmt/src/format.cc"
+  "command": "/usr/bin/c++  -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include -std=gnu++2a -o CMakeFiles/fmt.dir/src/format.cc.o -c /home/lunar/pros/evo/third_party/fmt/src/format.cc",
+  "file": "/home/lunar/pros/evo/third_party/fmt/src/format.cc",
+  "output": "third_party/fmt/CMakeFiles/fmt.dir/src/format.cc.o"
 },
 {
   "directory": "/home/lunar/pros/evo/build/third_party/fmt",
-  "command": "/usr/bin/c++   -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include    -std=gnu++2a -o CMakeFiles/fmt.dir/src/os.cc.o -c /home/lunar/pros/evo/third_party/fmt/src/os.cc",
-  "file": "/home/lunar/pros/evo/third_party/fmt/src/os.cc"
+  "command": "/usr/bin/c++  -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include -std=gnu++2a -o CMakeFiles/fmt.dir/src/os.cc.o -c /home/lunar/pros/evo/third_party/fmt/src/os.cc",
+  "file": "/home/lunar/pros/evo/third_party/fmt/src/os.cc",
+  "output": "third_party/fmt/CMakeFiles/fmt.dir/src/os.cc.o"
+},
+{
+  "directory": "/home/lunar/pros/evo/build/test",
+  "command": "/usr/bin/c++  -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include -std=gnu++2a -o CMakeFiles/coroutine_test.dir/coroutine_test.cpp.o -c /home/lunar/pros/evo/test/coroutine_test.cpp",
+  "file": "/home/lunar/pros/evo/test/coroutine_test.cpp",
+  "output": "test/CMakeFiles/coroutine_test.dir/coroutine_test.cpp.o"
+},
+{
+  "directory": "/home/lunar/pros/evo/build/test",
+  "command": "/usr/bin/c++  -I/home/lunar/pros/evo/evo -I/home/lunar/pros/evo/PUBLIC -I/home/lunar/pros/evo/include -I/home/lunar/pros/evo/third_party/fmt/include -std=gnu++2a -o CMakeFiles/string_test.dir/string_test.cpp.o -c /home/lunar/pros/evo/test/string_test.cpp",
+  "file": "/home/lunar/pros/evo/test/string_test.cpp",
+  "output": "test/CMakeFiles/string_test.dir/string_test.cpp.o"
 }
 ]

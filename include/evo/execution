@@ -15,30 +15,30 @@ namespace execution {
 template <typename P, typename E, typename... Vs>
 concept LazyPromise = 
 requires(P& p, E&& e, Vs&&... vs) {
-    p.set_value( (Vs&&) vs... );
-    p.set_exception( (E&&) e );
-    p.set_done();
+  p.set_value( (Vs&&) vs... );
+  p.set_exception( (E&&) e );
+  p.set_done();
 };
 
 template <typename P, typename E = void>
 concept Receiver = 
 requires(P&& p, E&& e) {
-    p.set_error( (E&&)e );
-    p.set_done();
+  p.set_error( (E&&)e );
+  p.set_done();
 };
 
 template <typename P, typename... Vs>
 concept ReceiverOf = 
 Receiver<P> &&
 requires(P&& p, Vs&&... vs) {
-    p.set_value( (Vs&&) vs... );
+  p.set_value( (Vs&&) vs... );
 };
 
 template <typename F, typename R>
 concept LazyFuture = 
 Receiver<R> &&
 requires(F&& f, R&& r) {
-    evo::forward<F>(f)( (R&&)r );
+  evo::forward<F>(f)( (R&&)r );
 };
 
 }

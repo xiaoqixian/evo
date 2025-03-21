@@ -1,4 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
+
+set(CMAKE_CXX_COMPILER /usr/bin/clang++-18)
+set(CMAKE_C_COMPILER /usr/bin/clang-18)
+# file(READ "/etc/os-release" OS_RELEASE_CONTENT)
+# if(OS_RELEASE_CONTENT MATCHES "Ubuntu")
+#   message("This is an Ubuntu system")
+# else()
+#   message("This is not an Ubuntu system")
+# endif()
+
 project(evo)
 
 set(CMAKE_CXX_STANDARD 20)

@@ -37,9 +37,9 @@ concept same_as = evo::is_same_v<T, U>;
 
 template <typename From, typename To>
 concept convertible_to = evo::is_constructible_v<From, To> &&
-    requires {
-        static_cast<To>(declval<From>());
-    };
+  requires {
+      static_cast<To>(declval<From>());
+  };
 
 } // namespace concepts
 

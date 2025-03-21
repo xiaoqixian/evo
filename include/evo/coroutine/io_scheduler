@@ -9,6 +9,7 @@
 #include <chrono>
 #include <vector>
 #include <coroutine>
+#include <memory>
 
 #include "evo/coroutine/task"
 
@@ -18,128 +19,128 @@ namespace evo {
 
 #include <sys/event.h>
 enum class poll_op {
-    READ = EVFILT_READ,
-    WRITE = EVFILT_WRITE,
-    READ_WRITE = EVFILT_READ | EVFILT_WRITE
+  READ = EVFILT_READ,
+  WRITE = EVFILT_WRITE,
+  READ_WRITE = EVFILT_READ | EVFILT_WRITE
 };
 
 #else
 #include <sys/epoll.h>
 enum class poll_op {
-    READ = EPOLLIN,
-    WRITE = EPOLLOUT,
-    READ_WRITE = EPOLLIN | EPOLLOUT
+  READ = EPOLLIN,
+  WRITE = EPOLLOUT,
+  READ_WRITE = EPOLLIN | EPOLLOUT
 };
 
 #endif // __APPLE__
 
 enum class poll_status {
-    // the poll operation was successful
-    EVENT,
+  // the poll operation was successful
+  EVENT,
 
-    // the poll operation timeout
-    TIMEOUT,
+  // the poll operation timeout
+  TIMEOUT,
 
-    // the poll operation failed
-    ERROR,
+  // the poll operation failed
+  ERROR,
 
-    // the file descriptor is closed
-    CLOSED
+  // the file descriptor is closed
+  CLOSED
 };
 
 struct poll_info {
-    int fd;
-    std::coroutine_handle<> handle;
-    poll_status status;
+  int fd;
+  std::coroutine_handle<> handle;
+  poll_status status;
 
-    poll_info(int fd): fd(fd), handle(nullptr) {}
+  poll_info(int fd): fd(fd), handle(nullptr) {}
 
-    struct poll_awaiter {
-        poll_info& pi;
+  struct poll_awaiter {
+    poll_info& pi;
 
-        explicit poll_awaiter(poll_info& pi): pi(pi) {}
+    explicit poll_awaiter(poll_info& pi): pi(pi) {}
 
-        inline bool await_ready() const noexcept {
-            return false;
-        }
-
-        void await_suspend(std::coroutine_handle<> h) noexcept {
-            this->pi.handle = h;
-            // TODO: why put atomic_thread_fence here.
-            // std::atomic_thread_fence(std::memory_order_release);
-        }
-
-        poll_status await_resume() const noexcept {
-            return this->pi.status;
-        }
-    };
-
-    poll_awaiter operator co_await() noexcept {
-        return poll_awaiter(*this);
+    inline bool await_ready() const noexcept {
+      return false;
     }
+
+    void await_suspend(std::coroutine_handle<> h) noexcept {
+      this->pi.handle = h;
+      // TODO: why put atomic_thread_fence here.
+      // std::atomic_thread_fence(std::memory_order_release);
+    }
+
+    poll_status await_resume() const noexcept {
+      return this->pi.status;
+    }
+  };
+
+  poll_awaiter operator co_await() noexcept {
+    return poll_awaiter(*this);
+  }
 };
 
 enum class poll_resume_policy {
-    // resume on the current thread.
-    INLINE,
+  // resume on the current thread.
+  INLINE,
 
-    // resume in a thread pool
-    THREAD_POOL
+  // resume in a thread pool
+  THREAD_POOL
 };
 
 class io_scheduler_base {
 public:
 #ifdef __APPLE__
-    typedef struct kevent poll_event;
+  typedef struct kevent poll_event;
 
-    int kq_fd;
+  int kq_fd;
 
 #else
-    typedef struct epoll_event poll_event;
-    
-    int epoll_fd;
+  typedef struct epoll_event poll_event;
+  
+  int epoll_fd;
 
 #endif
 
-    typedef std::chrono::milliseconds timeunit_t;
-    
-    static const constexpr timeunit_t DEFAULT_TIMEOUT { 1000 };
-    static const constexpr int MAX_EVENTS = 16;
+  typedef std::chrono::milliseconds timeunit_t;
+  
+  static const constexpr timeunit_t DEFAULT_TIMEOUT { 1000 };
+  static const constexpr int MAX_EVENTS = 16;
 
-    std::array<poll_event, MAX_EVENTS> events {};
-    std::vector<std::coroutine_handle<>> handles_to_resume;
+  std::array<poll_event, MAX_EVENTS> events {};
+  std::vector<std::coroutine_handle<>> handles_to_resume;
 
-    evo::task<poll_status> poll(int fd, poll_op op, timeunit_t timeout);
-    evo::task<poll_status> poll(int fd, poll_op op);
+  evo::task<poll_status> poll(int fd, poll_op op, timeunit_t timeout);
+  evo::task<poll_status> poll(int fd, poll_op op);
 
-    void run(timeunit_t);
-    void process_event(poll_info* info);
+  void run(timeunit_t);
+  void process_event(poll_info* info);
 
-    virtual void resume_handles() = 0;
+  virtual void resume_handles() = 0;
 
 // #ifdef __APPLE__
-//     static poll_status event_to_status(u_short flags);
+//   static poll_status event_to_status(u_short flags);
 // #else
-//     static poll_status event_to_status(uint32_t flags);
+//   static poll_status event_to_status(uint32_t flags);
 // #endif
 };
 
 template <typename ThreadPoolType = void>
 class io_scheduler: public io_scheduler_base {
-    typedef ThreadPoolType threadpool_t;
+  typedef ThreadPoolType threadpool_t;
 
-    std::shared_ptr<threadpool_t> pool;
+  std::shared_ptr<threadpool_t> pool;
 public:
-    io_scheduler() = delete;
-    io_scheduler(std::shared_ptr<threadpool_t> p);
+  io_scheduler() = delete;
+  io_scheduler(std::shared_ptr<threadpool_t> p);
 
-    virtual void resume_handles() override;
+  virtual void resume_handles() override;
 };
 
 template <>
 class io_scheduler<void>: public io_scheduler_base {
 public:
-    virtual void resume_handles() override;
+  virtual void resume_handles() override;
 };
 
 } // namespace evo

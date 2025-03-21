@@ -3,8 +3,7 @@
 // Mail: lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
-#ifndef _VARIANT_H
-#define _VARIANT_H
+#pragma once
 
 #include "evo/type_traits"
 #include "evo/utility"
@@ -17,9 +16,9 @@ class variant;
 
 class bad_variant_access: public evo::exception {
 public:
-    virtual const char* what() const noexcept {
-        return "bad_variant_access";
-    }
+  virtual const char* what() const noexcept {
+      return "bad_variant_access";
+  }
 };
 
 // concepts
@@ -29,22 +28,22 @@ public:
 template <typename T>
 concept WellFormedType = 
 evo::Not<
-    evo::Or<
-        evo::is_void<T>,
-        evo::is_reference<T>,
-        evo::is_array<T>
-    >
+  evo::Or<
+      evo::is_void<T>,
+      evo::is_reference<T>,
+      evo::is_array<T>
+  >
 >::value;
 
 // if type T is unique in Ts...
 template <typename T, typename First, typename... Rest>
 struct is_unique_type: evo::Xor<
-    evo::is_same<T, First>,
-    evo::conditional_t<
-        sizeof...(Rest) == 0,
-        false_type,
-        is_unique_type<T, Rest...>
-    >
+  evo::is_same<T, First>,
+  evo::conditional_t<
+      sizeof...(Rest) == 0,
+      false_type,
+      is_unique_type<T, Rest...>
+  >
 > {};
 
 // find unique type T among Types...
@@ -53,18 +52,18 @@ struct unique_type_index_impl;
 
 template <size_t I, typename... Ts>
 struct unique_type_index_impl<true, I, Ts...> {
-    static const size_t value = I;
+  static const size_t value = I;
 };
 
 template <size_t I, typename T, typename First, typename... Rest>
 struct unique_type_index_impl<false, I, T, First, Rest...> {
-    static const size_t value = 
-        unique_type_index_impl<std::is_same<T, First>::value, I+1, T, Rest...>::value;
+  static const size_t value = 
+      unique_type_index_impl<std::is_same<T, First>::value, I+1, T, Rest...>::value;
 };
 
 template <typename T, typename First, typename... Rest>
 struct unique_type_index 
-    : unique_type_index_impl<std::is_same<T, First>::value, 0, T, Rest...> {};
+  : unique_type_index_impl<std::is_same<T, First>::value, 0, T, Rest...> {};
 
 template <size_t, typename>
 class variant_alternative;
@@ -72,12 +71,12 @@ class variant_alternative;
 // index the N-th type in type-list
 template <size_t I, typename Head, typename... Rest>
 struct variant_alternative<I, variant<Head, Rest...>> {
-    typedef typename variant_alternative<I-1, variant<Rest...>>::type type;
+  typedef typename variant_alternative<I-1, variant<Rest...>>::type type;
 };
 
 template <typename Head, typename... Rest>
 struct variant_alternative<0, variant<Head, Rest...>> {
-    typedef Head type;
+  typedef Head type;
 };
 
 template <size_t N, typename... Ts>
@@ -85,17 +84,17 @@ using variant_alternative_t = typename variant_alternative<N, Ts...>::type;
 
 template <typename Head, typename... Rest>
 struct variant_union {
-    union {
-        Head value;
-        variant_union<Rest...> rest_union;
-    };
+  union {
+      Head value;
+      variant_union<Rest...> rest_union;
+  };
 };
 
 template <typename Head>
 struct variant_union<Head> {
-    union {
-        Head value;
-    };
+  union {
+      Head value;
+  };
 };
 
 namespace evo_variant {
@@ -103,25 +102,25 @@ namespace evo_variant {
 template <size_t N, typename V>
 inline static constexpr auto&& 
 get_index_value(V&& var, in_place_index_t<N>) {
-    return get_index_value(forward<V>(var).rest_union, in_place_index<N-1>);
+  return get_index_value(forward<V>(var).rest_union, in_place_index<N-1>);
 }
 
 template <typename V>
 inline static constexpr auto&& 
 get_index_value(V&& var, in_place_index_t<0>) {
-    return var.value;
+  return var.value;
 }
 
 template <size_t N, typename V, typename T>
 inline static constexpr void
 set_index_value(V&& var, in_place_index_t<N>, T&& val) {
-    set_index_value(forward<V>(var).rest_union, in_place_index<N-1>);
+  set_index_value(forward<V>(var).rest_union, in_place_index<N-1>);
 }
 
 template <typename V, typename T>
 inline static constexpr void
 set_index_value(V&& var, in_place_index_t<0>, T&& val) {
-    var.value = val;
+  var.value = val;
 }
 } // end of namespace evo_variant
 
@@ -129,139 +128,137 @@ set_index_value(V&& var, in_place_index_t<0>, T&& val) {
 template <WellFormedType... Ts>
 class variant<Ts...> {
 private:
-    variant_union<Ts...> value;
-    int idx = -1;
+  variant_union<Ts...> value;
+  int idx = -1;
 public:
-    using first_type = typename variant_alternative<0, Ts...>::type;
+  using first_type = typename variant_alternative<0, Ts...>::type;
 
 public:
-    constexpr variant() noexcept 
-    requires(is_default_constructible_v<first_type>)
-        : idx(0)
-    {}
+  constexpr variant() noexcept 
+  requires(is_default_constructible_v<first_type>)
+      : idx(0)
+  {}
 
-    constexpr variant(variant const&) = delete;
+  constexpr variant(variant const&) = delete;
 
-    constexpr variant(variant const& other) 
-    requires(And<is_copy_constructible<Ts>...>::value) 
-    = default;
+  constexpr variant(variant const& other) 
+  requires(And<is_copy_constructible<Ts>...>::value) 
+  = default;
 
-    constexpr variant(variant &&) = delete;
+  constexpr variant(variant &&) = delete;
 
-    constexpr variant(variant &&) 
-    requires(And<is_move_constructible<Ts>...>::value)
-    = default;
+  constexpr variant(variant &&) 
+  requires(And<is_move_constructible<Ts>...>::value)
+  = default;
 
-    inline constexpr int index() const noexcept {
-        return this->idx;
-    }
+  inline constexpr int index() const noexcept {
+      return this->idx;
+  }
 
-    inline constexpr bool valueless_by_exception() const noexcept {
-        return this->idx == -1;
-    }
+  inline constexpr bool valueless_by_exception() const noexcept {
+      return this->idx == -1;
+  }
 
-    // return a value reference if I == index(),
-    // other thorw bad_variant_access.
-    template <size_t I, typename... Us>
-    inline static constexpr variant_alternative_t<I, variant<Us...>> const&
-    get(variant const& var) {
-        if (I == var.index()) {
-            return evo_variant::get_index_value(var, in_place_index<I>);
-        } else {
-            throw bad_variant_access();
-        }
-    }
+  // return a value reference if I == index(),
+  // other thorw bad_variant_access.
+  template <size_t I, typename... Us>
+  inline static constexpr variant_alternative_t<I, variant<Us...>> const&
+  get(variant const& var) {
+      if (I == var.index()) {
+          return evo_variant::get_index_value(var, in_place_index<I>);
+      } else {
+          throw bad_variant_access();
+      }
+  }
 
-    template <size_t I, typename... Us>
-    inline static constexpr variant_alternative_t<I, variant<Us...>> &
-    get(variant & var) {
-        if (I == var.index()) {
-            return evo_variant::get_index_value(var, in_place_index<I>);
-        } else {
-            throw bad_variant_access();
-        }
-    }
+  template <size_t I, typename... Us>
+  inline static constexpr variant_alternative_t<I, variant<Us...>> &
+  get(variant & var) {
+      if (I == var.index()) {
+          return evo_variant::get_index_value(var, in_place_index<I>);
+      } else {
+          throw bad_variant_access();
+      }
+  }
 
-    template <size_t I, typename... Us>
-    inline static constexpr variant_alternative_t<I, variant<Us...>> const&&
-    get(variant const&& var) {
-        if (I == var.index()) {
-            return evo_variant::get_index_value(
-                move(var), in_place_index<I>);
-        } else {
-            throw bad_variant_access();
-        }
-    }
+  template <size_t I, typename... Us>
+  inline static constexpr variant_alternative_t<I, variant<Us...>> const&&
+  get(variant const&& var) {
+      if (I == var.index()) {
+          return evo_variant::get_index_value(
+              move(var), in_place_index<I>);
+      } else {
+          throw bad_variant_access();
+      }
+  }
 
-    template <size_t I, typename... Us>
-    inline static constexpr variant_alternative_t<I, variant<Us...>> &&
-    get(variant && var) {
-        if (I == var.index()) {
-            return evo_variant::get_index_value(
-                move(var), in_place_index<I>);
-        } else {
-            throw bad_variant_access();
-        }
-    }
+  template <size_t I, typename... Us>
+  inline static constexpr variant_alternative_t<I, variant<Us...>> &&
+  get(variant && var) {
+      if (I == var.index()) {
+          return evo_variant::get_index_value(
+              move(var), in_place_index<I>);
+      } else {
+          throw bad_variant_access();
+      }
+  }
 
-    // If T is the unique type in Ts...
-    template <typename T, typename... Us>
-    inline static constexpr T const&
-    get(variant<Us...> const& var) {
-        static_assert(is_unique_type<T, Us...>::value, 
-            "The call is ill-formed as type T is not a unique type of Types...");
-        if (var.index() != unique_type_index<T, Us...>::value) {
-            throw bad_variant_access();
-        }
-        return evo_variant::get_index_value(
-            var, in_place_index<unique_type_index<T, Us...>::value>);
-    }
+  // If T is the unique type in Ts...
+  template <typename T, typename... Us>
+  inline static constexpr T const&
+  get(variant<Us...> const& var) {
+      static_assert(is_unique_type<T, Us...>::value, 
+          "The call is ill-formed as type T is not a unique type of Types...");
+      if (var.index() != unique_type_index<T, Us...>::value) {
+          throw bad_variant_access();
+      }
+      return evo_variant::get_index_value(
+          var, in_place_index<unique_type_index<T, Us...>::value>);
+  }
 
-    template <typename T, typename... Us>
-    inline static constexpr T &
-    get(variant<Us...> & var) {
-        static_assert(is_unique_type<T, Us...>::value, 
-            "The call is ill-formed as type T is not a unique type of Types...");
-        if (var.index() != unique_type_index<T, Us...>::value) {
-            throw bad_variant_access();
-        }
-        return evo_variant::get_index_value(
-            var, in_place_index<unique_type_index<T, Us...>::value>);
-    }
+  template <typename T, typename... Us>
+  inline static constexpr T &
+  get(variant<Us...> & var) {
+      static_assert(is_unique_type<T, Us...>::value, 
+          "The call is ill-formed as type T is not a unique type of Types...");
+      if (var.index() != unique_type_index<T, Us...>::value) {
+          throw bad_variant_access();
+      }
+      return evo_variant::get_index_value(
+          var, in_place_index<unique_type_index<T, Us...>::value>);
+  }
 
-    template <typename T, typename... Us>
-    inline static constexpr T const&&
-    get(variant<Us...> const&& var) {
-        static_assert(is_unique_type<T, Us...>::value, 
-            "The call is ill-formed as type T is not a unique type of Types...");
-        if (var.index() != unique_type_index<T, Us...>::value) {
-            throw bad_variant_access();
-        }
-        return evo_variant::get_index_value(
-            move(var), in_place_index<unique_type_index<T, Us...>::value>);
-    }
+  template <typename T, typename... Us>
+  inline static constexpr T const&&
+  get(variant<Us...> const&& var) {
+      static_assert(is_unique_type<T, Us...>::value, 
+          "The call is ill-formed as type T is not a unique type of Types...");
+      if (var.index() != unique_type_index<T, Us...>::value) {
+          throw bad_variant_access();
+      }
+      return evo_variant::get_index_value(
+          move(var), in_place_index<unique_type_index<T, Us...>::value>);
+  }
 
-    template <typename T, typename... Us>
-    inline static constexpr T &&
-    get(variant<Us...> && var) {
-        static_assert(is_unique_type<T, Us...>::value, 
-            "The call is ill-formed as type T is not a unique type of Types...");
-        if (var.index() != unique_type_index<T, Us...>::value) {
-            throw bad_variant_access();
-        }
-        return evo_variant::get_index_value(
-            move(var), in_place_index<unique_type_index<T, Us...>::value>);
-    }
+  template <typename T, typename... Us>
+  inline static constexpr T &&
+  get(variant<Us...> && var) {
+      static_assert(is_unique_type<T, Us...>::value, 
+          "The call is ill-formed as type T is not a unique type of Types...");
+      if (var.index() != unique_type_index<T, Us...>::value) {
+          throw bad_variant_access();
+      }
+      return evo_variant::get_index_value(
+          move(var), in_place_index<unique_type_index<T, Us...>::value>);
+  }
 
-    template <size_t I, typename... Us>
-    inline static constexpr evo::add_pointer_t<variant_alternative_t<I, variant<Us...>>>
-    get_if(variant<Us...>* pv) noexcept {
-        static_assert(I < sizeof...(Us), 
-            "this call is ill-formed as index I is not a valid index in the variant");
-        
-    }
+  template <size_t I, typename... Us>
+  inline static constexpr evo::add_pointer_t<variant_alternative_t<I, variant<Us...>>>
+  get_if(variant<Us...>* pv) noexcept {
+      static_assert(I < sizeof...(Us), 
+          "this call is ill-formed as index I is not a valid index in the variant");
+      
+  }
 };
 
 }
-
-#endif // _VARIANT_H

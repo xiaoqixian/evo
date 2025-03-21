@@ -3,8 +3,9 @@
 // Author: https://github.com/xiaoqixian
 
 #include "evo/string"
-#include <string>
+#include <cstdio>
 
 int main() {
-  evo::string s;
+  evo::string s("hello");
+  printf("%s\n", s.c_str());
 }

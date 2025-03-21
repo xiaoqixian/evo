@@ -16,46 +16,46 @@ namespace evo {
 template <typename T>
 class future {
 public:
-    typedef T value_type;
+  typedef T value_type;
 private:
-    bool is_valid;
-    value_type val;
+  bool is_valid;
+  value_type val;
 public:
-    future() noexcept
-        requires(evo::is_default_constructible_v<value_type>)
-        : is_valid(false) 
-    {}
+  future() noexcept
+      requires(evo::is_default_constructible_v<value_type>)
+      : is_valid(false) 
+  {}
 
-    template <typename U>
-    future(future<U>&& other) noexcept
-        requires(evo::is_constructible_v<value_type, U&&>)
-        : val(evo::move(other.get())),
-          is_valid(true)
-    {
-        other.is_valid = false;
-    }
+  template <typename U>
+  future(future<U>&& other) noexcept
+      requires(evo::is_constructible_v<value_type, U&&>)
+      : val(evo::move(other.get())),
+        is_valid(true)
+  {
+      other.is_valid = false;
+  }
 
-    future(future const&) = delete;
+  future(future const&) = delete;
 
-    template <typename U>
-    future& operator=(future<U>&& other) noexcept
-        requires(evo::is_constructible_v<value_type, U&&>)
-    {
-        this->val = evo::move(other.get());
-        this->is_valid = true;
-        other.is_valid = false;
-        return *this;
-    }
+  template <typename U>
+  future& operator=(future<U>&& other) noexcept
+      requires(evo::is_constructible_v<value_type, U&&>)
+  {
+      this->val = evo::move(other.get());
+      this->is_valid = true;
+      other.is_valid = false;
+      return *this;
+  }
 
-    future& operator=(future const&) = delete;
+  future& operator=(future const&) = delete;
 
-    inline constexpr bool valid() const noexcept {
-        return this->is_valid;
-    }
+  inline constexpr bool valid() const noexcept {
+    return this->is_valid;
+  }
 
-    T get() noexcept;
+  T get() noexcept;
 
-    void wait() noexcept;
+  void wait() noexcept;
 
 };
 
@@ -63,7 +63,7 @@ public:
 template <typename R>
 class promise {
 public:
-    future<R> get_future() noexcept; 
+  future<R> get_future() noexcept; 
 };
 
 // packaged_task
@@ -73,18 +73,18 @@ class packaged_task;
 
 template <typename F, typename... Args>
 class packaged_task<F(Args...)> {
-    typedef typename std::result_of<F(Args...)>::type return_type;
+  typedef typename std::result_of<F(Args...)>::type return_type;
 public:
-    bool valid() const noexcept;
+  bool valid() const noexcept;
 
-    future<return_type> get_future() const noexcept;
+  future<return_type> get_future() const noexcept;
 };
 
 // launch
 enum class launch {
-    async = 1,
-    defered = 2,
-    any = async | defered
+  async = 1,
+  defered = 2,
+  any = async | defered
 };
 
 }

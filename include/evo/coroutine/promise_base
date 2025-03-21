@@ -18,132 +18,132 @@ namespace evo {
 namespace promise_base_impl {
 
 struct promise_base_base {
-    // typedef std::coroutine_handle<Promise> handle_t;
+  // typedef std::coroutine_handle<Promise> handle_t;
 
-    // Awaitable get_return_object() 
-    //     noexcept(std::is_nothrow_constructible_v<Awaitable, handle_t>)
-    //     requires std::is_constructible_v<Awaitable, handle_t>
-    // {
-    //     return Awaitable(handle_t::from_promise(*this));
-    // }
+  // Awaitable get_return_object() 
+  //   noexcept(std::is_nothrow_constructible_v<Awaitable, handle_t>)
+  //   requires std::is_constructible_v<Awaitable, handle_t>
+  // {
+  //   return Awaitable(handle_t::from_promise(*this));
+  // }
 
-    auto initial_suspend() const noexcept {
-        return std::suspend_always();
-    }
+  auto initial_suspend() const noexcept {
+    return std::suspend_always();
+  }
 
-    auto final_suspend() const noexcept {
-        return std::suspend_always();
-    }
+  auto final_suspend() const noexcept {
+    return std::suspend_always();
+  }
 };
 
 } // namespace promise_base_impl
 
 template <typename Ret>
 struct promise_base: public promise_base_impl::promise_base_base {
-    typedef Ret value_type;
-    static constexpr bool value_type_is_ref = 
-        std::is_reference_v<Ret>;
+  typedef Ret value_type;
+  static constexpr bool value_type_is_ref = 
+    std::is_reference_v<Ret>;
 
-    typedef std::conditional_t<
-        value_type_is_ref,
-        std::remove_cvref_t<Ret>*,
-        std::remove_cv_t<Ret>
-    > stored_type;
+  typedef std::conditional_t<
+    value_type_is_ref,
+    std::remove_cvref_t<Ret>*,
+    std::remove_cv_t<Ret>
+  > stored_type;
 
-    typedef std::optional<stored_type> opt_type;
-    // just represent a unset state of value.
-    inline bool has_exception() const noexcept {
-        return std::holds_alternative<std::exception_ptr>(this->storage);
+  typedef std::optional<stored_type> opt_type;
+  // just represent a unset state of value.
+  inline bool has_exception() const noexcept {
+    return std::holds_alternative<std::exception_ptr>(this->storage);
+  }
+
+  void return_value(value_type&& val) noexcept {
+    if (!this->has_exception()) {
+      if constexpr (value_type_is_ref) {
+        this->storage.template emplace<opt_type>(
+          opt_type(std::addressof(val))
+        );
+      } 
+      else {
+        this->storage.template emplace<opt_type>(
+          opt_type(std::forward<value_type>(val))
+        );
+      }
     }
+  }
 
-    void return_value(value_type&& val) noexcept {
-        if (!this->has_exception()) {
-            if constexpr (value_type_is_ref) {
-                this->storage.template emplace<opt_type>(
-                    opt_type(std::addressof(val))
-                );
-            } 
-            else {
-                this->storage.template emplace<opt_type>(
-                    opt_type(std::forward<value_type>(val))
-                );
-            }
-        }
+  void yield_value(value_type&& val) noexcept {
+    if (!this->has_exception()) {
+      if constexpr (value_type_is_ref) {
+        this->storage.template emplace<opt_type>(
+          opt_type(std::addressof(val))
+        );
+      } 
+      else {
+        this->storage.template emplace<opt_type>(
+          opt_type(std::forward<value_type>(val))
+        );
+      }
     }
+  }
 
-    void yield_value(value_type&& val) noexcept {
-        if (!this->has_exception()) {
-            if constexpr (value_type_is_ref) {
-                this->storage.template emplace<opt_type>(
-                    opt_type(std::addressof(val))
-                );
-            } 
-            else {
-                this->storage.template emplace<opt_type>(
-                    opt_type(std::forward<value_type>(val))
-                );
-            }
-        }
-    }
+  void unhandled_exception() noexcept {
+    this->storage.template 
+      emplace<std::exception_ptr>(std::current_exception());
+  }
 
-    void unhandled_exception() noexcept {
-        this->storage.template 
-            emplace<std::exception_ptr>(std::current_exception());
+  auto result() & {
+    if (this->has_exception()) {
+      std::rethrow_exception(
+        std::get<std::exception_ptr>(this->storage));
     }
+    else {
+      opt_type& hold = std::get<opt_type>(this->storage);
+      if (hold.has_value()) {
+        if constexpr (value_type_is_ref) {
+          return static_cast<value_type>(*hold.value());
+        } else {
+          return static_cast<value_type&>(hold.value());
+        }
+      }
+      else {
+        throw std::runtime_error("coroutine value is never set");
+      }
+    }
+  }
 
-    auto result() & {
-        if (this->has_exception()) {
-            std::rethrow_exception(
-                std::get<std::exception_ptr>(this->storage));
-        }
-        else {
-            opt_type& hold = std::get<opt_type>(this->storage);
-            if (hold.has_value()) {
-                if constexpr (value_type_is_ref) {
-                    return static_cast<value_type>(*hold.value());
-                } else {
-                    return static_cast<value_type&>(hold.value());
-                }
-            }
-            else {
-                throw std::runtime_error("coroutine value is never set");
-            }
-        }
+  auto result() const& {
+    if (this->has_exception()) {
+      std::rethrow_exception(
+        std::get<std::exception_ptr>(this->storage));
     }
-
-    auto result() const& {
-        if (this->has_exception()) {
-            std::rethrow_exception(
-                std::get<std::exception_ptr>(this->storage));
+    else {
+      opt_type& hold = std::get<opt_type>(this->storage);
+      if (hold.has_value()) {
+        if constexpr (value_type_is_ref) {
+          return static_cast<std::remove_cvref_t<value_type> const&>(*hold.value());
+        } else {
+          return static_cast<value_type const&>(hold.value());
         }
-        else {
-            opt_type& hold = std::get<opt_type>(this->storage);
-            if (hold.has_value()) {
-                if constexpr (value_type_is_ref) {
-                    return static_cast<std::remove_cvref_t<value_type> const&>(*hold.value());
-                } else {
-                    return static_cast<value_type const&>(hold.value());
-                }
-            }
-            else {
-                throw std::runtime_error("coroutine value is never set");
-            }
-        }
+      }
+      else {
+        throw std::runtime_error("coroutine value is never set");
+      }
     }
+  }
 private:
-    std::variant<opt_type, std::exception_ptr> storage;
+  std::variant<opt_type, std::exception_ptr> storage;
 };
 
 template <>
 struct promise_base<void>: 
-    public promise_base_impl::promise_base_base {
-    void return_void() const noexcept {}
+  public promise_base_impl::promise_base_base {
+  void return_void() const noexcept {}
 
-    void unhandled_exception() noexcept {
-        this->except_ptr = std::current_exception();
-    }
+  void unhandled_exception() noexcept {
+    this->except_ptr = std::current_exception();
+  }
 private:
-    std::exception_ptr except_ptr;
+  std::exception_ptr except_ptr;
 };
 
 } // namespace evo

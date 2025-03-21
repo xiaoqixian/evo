@@ -18,143 +18,143 @@ namespace evo {
 template <typename Char, typename Traits = std::char_traits<Char>>
 class basic_streambuf {
 public:
-    typedef Char char_type;
-    typedef Traits traits_type;
-    typedef typename traits_type::int_type int_type;
-    typedef typename traits_type::pos_type pos_type;
-    typedef typename traits_type::off_type off_type;
+  typedef Char char_type;
+  typedef Traits traits_type;
+  typedef typename traits_type::int_type int_type;
+  typedef typename traits_type::pos_type pos_type;
+  typedef typename traits_type::off_type off_type;
 
-    static_assert((evo::is_same_v<char_type, typename traits_type::char_type>), 
-            "traits_type::char_type must be the same as Char");
+  static_assert((evo::is_same_v<char_type, typename traits_type::char_type>), 
+      "traits_type::char_type must be the same as Char");
 
-    virtual ~basic_streambuf();
+  virtual ~basic_streambuf();
 
-    inline basic_streambuf* pubsetbuf(char_type* s, std::streamsize n) {
-        return std::setbuf(s, n);
+  inline basic_streambuf* pubsetbuf(char_type* s, std::streamsize n) {
+    return std::setbuf(s, n);
+  }
+
+  inline pos_type pubseekoff(off_type off, std::ios_base::seekdir way, 
+      std::ios_base::openmode which = 
+      std::ios_base::in | std::ios_base::out) 
+  {
+    return this->seekoff(off, way, which);
+  }
+
+  inline int pubsync() { return this->sync(); }
+
+  inline std::streamsize in_avail() {
+    if (this->ninp < this->einp) {
+      return static_cast<std::streamsize>(
+        this->einp - this->ninp
+      );
     }
+    return this->showmanyc();
+  }
 
-    inline pos_type pubseekoff(off_type off, std::ios_base::seekdir way, 
-            std::ios_base::openmode which = 
-            std::ios_base::in | std::ios_base::out) 
-    {
-        return this->seekoff(off, way, which);
+  inline int_type sbumpc() {
+    if (this->ninp == this->einp) 
+      return this->uflow();
+    return traits_type::to_int_type(*(this->ninp)++);
+  }
+
+  inline int_type sgetc() {
+    if (this->ninp == this->einp) 
+      return this->underflow();
+    return traits_type::to_int_type(*(this->ninp));
+  }
+
+  inline int_type snextc() {
+    if (this->sbumpc() == traits_type::eof()) {
+      return traits_type::eof();
     }
+    return this->sgetc();
+  }
 
-    inline int pubsync() { return this->sync(); }
+  inline std::streamsize sgetn(char_type* s, std::streamsize n) {
+    return this->xsgetn(s, n);
+  }
 
-    inline std::streamsize in_avail() {
-        if (this->ninp < this->einp) {
-            return static_cast<std::streamsize>(
-                this->einp - this->ninp
-            );
-        }
-        return this->showmanyc();
+  inline int_type sputbackc(char_type c) {
+    if (this->binp == this->ninp || !traits_type::eq(c, this->ninp[-1])) {
+      return this->pbackfail(traits_type::to_int_type(c));
     }
+    return traits_type::to_int_type(*(--this->ninp));
+  }
 
-    inline int_type sbumpc() {
-        if (this->ninp == this->einp) 
-            return this->uflow();
-        return traits_type::to_int_type(*(this->ninp)++);
-    }
+  inline int_type sungetc() {
+    if (this->binp == this->ninp)
+      return this->pbackfail();
+    return traits_type::to_int_type(*(--this->ninp));
+  }
 
-    inline int_type sgetc() {
-        if (this->ninp == this->einp) 
-            return this->underflow();
-        return traits_type::to_int_type(*(this->ninp));
-    }
+  inline int_type sputc(char_type c) {
+    if (this->noutp == this->eoup) 
+      return this->overflow(traits_type::to_int_type(c));
+    *this->noutp++ = c;
+    return traits_type::to_int_type(c);
+  }
 
-    inline int_type snextc() {
-        if (this->sbumpc() == traits_type::eof()) {
-            return traits_type::eof();
-        }
-        return this->sgetc();
-    }
-
-    inline std::streamsize sgetn(char_type* s, std::streamsize n) {
-        return this->xsgetn(s, n);
-    }
-
-    inline int_type sputbackc(char_type c) {
-        if (this->binp == this->ninp || !traits_type::eq(c, this->ninp[-1])) {
-            return this->pbackfail(traits_type::to_int_type(c));
-        }
-        return traits_type::to_int_type(*(--this->ninp));
-    }
-
-    inline int_type sungetc() {
-        if (this->binp == this->ninp)
-            return this->pbackfail();
-        return traits_type::to_int_type(*(--this->ninp));
-    }
-
-    inline int_type sputc(char_type c) {
-        if (this->noutp == this->eoup) 
-            return this->overflow(traits_type::to_int_type(c));
-        *this->noutp++ = c;
-        return traits_type::to_int_type(c);
-    }
-
-    inline std::streamsize sputn(const char_type* s, std::streamsize n) {
-        return this->xsputn(s, n);
-    }
+  inline std::streamsize sputn(const char_type* s, std::streamsize n) {
+    return this->xsputn(s, n);
+  }
 
 protected:
-    basic_streambuf();
-    basic_streambuf(basic_streambuf const&);
-    basic_streambuf& operator=(basic_streambuf const&);
-    void swap(basic_streambuf&);
+  basic_streambuf();
+  basic_streambuf(basic_streambuf const&);
+  basic_streambuf& operator=(basic_streambuf const&);
+  void swap(basic_streambuf&);
 
-    char_type* eback() const { return this->binp; }
-    char_type* gptr() const { return this->ninp; }
-    char_type* egptr() const { return this->einp; }
+  char_type* eback() const { return this->binp; }
+  char_type* gptr() const { return this->ninp; }
+  char_type* egptr() const { return this->einp; }
 
-    inline void gbump(const int n) { this->binp += n; }
+  inline void gbump(const int n) { this->binp += n; }
 
-    inline void setg(char_type* gbeg, char_type* gnext, char_type* gend) {
-        this->binp = gbeg;
-        this->ninp = gnext;
-        this->einp = gend;
-    }
+  inline void setg(char_type* gbeg, char_type* gnext, char_type* gend) {
+    this->binp = gbeg;
+    this->ninp = gnext;
+    this->einp = gend;
+  }
 
-    char_type* pbase() const { return this->boutp; }
-    char_type* pptr() const { return this->noutp; }
-    char_type* epptr() const { return this->eoutp; }
+  char_type* pbase() const { return this->boutp; }
+  char_type* pptr() const { return this->noutp; }
+  char_type* epptr() const { return this->eoutp; }
 
-    inline void pbump(const int n) { this->boutp += n; }
-    inline void pbump(const std::streamsize n) { this->boutp += n; }
+  inline void pbump(const int n) { this->boutp += n; }
+  inline void pbump(const std::streamsize n) { this->boutp += n; }
 
-    inline void setp(char_type* pbeg, char_type* pend) {
-        this->boutp = this->noutp = pbeg;
-        this->eoutp = pend;
-    }
+  inline void setp(char_type* pbeg, char_type* pend) {
+    this->boutp = this->noutp = pbeg;
+    this->eoutp = pend;
+  }
 
-    virtual basic_streambuf* setbuf(char_type*, std::streamsize);
+  virtual basic_streambuf* setbuf(char_type*, std::streamsize);
 
-    virtual pos_type 
-    seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode);
+  virtual pos_type 
+  seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode);
 
-    virtual pos_type 
-    seekpos(pos_type, std::ios_base::openmode);
+  virtual pos_type 
+  seekpos(pos_type, std::ios_base::openmode);
 
-    virtual int sync();
+  virtual int sync();
 
-    virtual std::streamsize showmanyc();
-    virtual std::streamsize xsgetn(char_type* s, std::streamsize n);
-    virtual int_type underflow();
-    virtual int_type uflow();
+  virtual std::streamsize showmanyc();
+  virtual std::streamsize xsgetn(char_type* s, std::streamsize n);
+  virtual int_type underflow();
+  virtual int_type uflow();
 
-    virtual int_type pbackfail(int_type c = traits_type::eof());
+  virtual int_type pbackfail(int_type c = traits_type::eof());
 
-    virtual std::streamsize xsputn(const char_type*, std::streamsize);
-    virtual int_type overflow(int_type c = traits_type::eof());
+  virtual std::streamsize xsputn(const char_type*, std::streamsize);
+  virtual int_type overflow(int_type c = traits_type::eof());
 
 private:
-    char_type* binp;  // input  begin pointer
-    char_type* ninp;  // input  next  pointer
-    char_type* einp;  // input  end   pointer
-    char_type* boutp; // output begin pointer
-    char_type* noutp; // output next  pointer
-    char_type* eoutp; // output end   pointer
+  char_type* binp;  // input  begin pointer
+  char_type* ninp;  // input  next  pointer
+  char_type* einp;  // input  end   pointer
+  char_type* boutp; // output begin pointer
+  char_type* noutp; // output next  pointer
+  char_type* eoutp; // output end   pointer
 };
 
 template <typename Char, typename Traits>
@@ -162,109 +162,109 @@ basic_streambuf<Char, Traits>::~basic_streambuf() {}
 
 template <typename Char, typename Traits>
 basic_streambuf<Char, Traits>::basic_streambuf():
-    binp(nullptr), ninp(nullptr), einp(nullptr),
-    boutp(nullptr), noutp(nullptr), eoutp(nullptr) {}
+  binp(nullptr), ninp(nullptr), einp(nullptr),
+  boutp(nullptr), noutp(nullptr), eoutp(nullptr) {}
 
 template <typename Char, typename Traits>
 basic_streambuf<Char, Traits>::basic_streambuf(basic_streambuf const& other):
-    binp(other.binp),
-    ninp(other.ninp),
-    einp(other.einp),
-    boutp(other.boutp),
-    noutp(other.noutp),
-    eoutp(other.eoutp) {}
+  binp(other.binp),
+  ninp(other.ninp),
+  einp(other.einp),
+  boutp(other.boutp),
+  noutp(other.noutp),
+  eoutp(other.eoutp) {}
 
 template <typename Char, typename Traits>
 basic_streambuf<Char, Traits>&
 basic_streambuf<Char, Traits>::operator=(basic_streambuf const& other) {
-    this->binp = other.binp;
-    this->ninp = other.ninp;
-    this->einp = other.einp;
-    this->boutp = other.boutp;
-    this->noutp = other.noutp;
-    this->eoutp = other.eoutp;
-    return *this;
+  this->binp = other.binp;
+  this->ninp = other.ninp;
+  this->einp = other.einp;
+  this->boutp = other.boutp;
+  this->noutp = other.noutp;
+  this->eoutp = other.eoutp;
+  return *this;
 }
 
 template <typename Char, typename Traits>
 void basic_streambuf<Char, Traits>::swap(basic_streambuf& other) {
-    std::swap(this->binp, other.binp);
-    std::swap(this->ninp, other.ninp);
-    std::swap(this->einp, other.einp);
-    std::swap(this->boutp, other.boutp);
-    std::swap(this->noutp, other.noutp);
-    std::swap(this->eoutp, other.eoutp);
-    return *this;
+  std::swap(this->binp, other.binp);
+  std::swap(this->ninp, other.ninp);
+  std::swap(this->einp, other.einp);
+  std::swap(this->boutp, other.boutp);
+  std::swap(this->noutp, other.noutp);
+  std::swap(this->eoutp, other.eoutp);
+  return *this;
 }
 
 template <typename Char, typename Traits>
 typename basic_streambuf<Char, Traits>::pos_type
 basic_streambuf<Char, Traits>::seekoff(off_type, std::ios_base::seekdir, std::ios_base::openmode) {
-    return pos_type(off_type(-1));
+  return pos_type(off_type(-1));
 }
 
 template <typename Char, typename Traits>
 typename basic_streambuf<Char, Traits>::pos_type
 basic_streambuf<Char, Traits>::seekpos(pos_type, std::ios_base::openmode) {
-    return pos_type(off_type(-1));
+  return pos_type(off_type(-1));
 }
 
 template <typename Char, typename Traits>
 int basic_streambuf<Char, Traits>::sync() {
-    return 0;
+  return 0;
 }
 
 template <typename Char, typename Traits>
 std::streamsize basic_streambuf<Char, Traits>::showmanyc() {
-    return 0;
+  return 0;
 }
 
 template <typename Char, typename Traits>
 std::streamsize basic_streambuf<Char, Traits>::xsgetn(char_type* s, std::streamsize n) {
-    const int_type eof = traits_type::eof();
-    int_type c;
-    std::streamsize i = 0;
+  const int_type eof = traits_type::eof();
+  int_type c;
+  std::streamsize i = 0;
 
-    while (i < n) {
-        if (this->ninp < this->einp) {
-            const std::streamsize len = std::min(
-                static_cast<std::streamsize>(INT_MAX), 
-                this->einp - this->ninp, n - i
-            );
+  while (i < n) {
+    if (this->ninp < this->einp) {
+      const std::streamsize len = std::min(
+        static_cast<std::streamsize>(INT_MAX), 
+        this->einp - this->ninp, n - i
+      );
 
-            traits_type::copy(s, this->ninp, len);
-            s += len;
-            i += len;
+      traits_type::copy(s, this->ninp, len);
+      s += len;
+      i += len;
 
-            this->gbump(len);
-        }
-        else if ((c = this->uflow()) != eof) {
-            *s = traits_type::to_char_type(c);
-            ++s; ++i;
-        }
-        else break;
+      this->gbump(len);
     }
-    return i;
+    else if ((c = this->uflow()) != eof) {
+      *s = traits_type::to_char_type(c);
+      ++s; ++i;
+    }
+    else break;
+  }
+  return i;
 }
 
 template <typename Char, typename Traits>
 typename basic_streambuf<Char, Traits>::int_type
 basic_streambuf<Char, Traits>::underflow() {
-    return traits_type::eof();
+  return traits_type::eof();
 }
 
 template <typename Char, typename Traits>
 typename basic_streambuf<Char, Traits>::int_type
 basic_streambuf<Char, Traits>::uflow() {
-    if (this->underflow() == traits_type::eof()) 
-        return traits_type::eof();
-    return traits_type::to_int_type(*(this->ninp)++);
+  if (this->underflow() == traits_type::eof()) 
+    return traits_type::eof();
+  return traits_type::to_int_type(*(this->ninp)++);
 }
 
 template <typename Char, typename Traits>
 typename basic_streambuf<Char, Traits>::int_type
 basic_streambuf<Char, Traits>::pbackfail(int_type) {
-    return traits_type::eof();
+  return traits_type::eof();
 }
 
 // xsputn tries to put a string with size n to put area, 
@@ -275,33 +275,33 @@ basic_streambuf<Char, Traits>::pbackfail(int_type) {
 // then the loop breaks, the final total put size is returned.
 template <typename Char, typename Traits>
 std::streamsize basic_streambuf<Char, Traits>::xsputn(const char_type* s, std::streamsize n) {
-    std::streamsize i = 0;
-    int_type eof = traits_type::eof(); 
+  std::streamsize i = 0;
+  int_type eof = traits_type::eof(); 
 
-    while (i < n) {
-        if (this->noutp >= this->eoutp) {
-            if (this->overflow(traits_type::to_int_type(*s)) == eof) 
-                break;
-            ++s;
-            ++i;
-        } 
-        else {
-            std::streamsize chunk_size = std::min(
-                this->eoutp - this->noutp, n - i
-            );
-            traits_type::copy(this->noutp, s, chunk_size);
-            this->noutp += chunk_size;
-            s += chunk_size;
-            i += chunk_size;
-        }
+  while (i < n) {
+    if (this->noutp >= this->eoutp) {
+      if (this->overflow(traits_type::to_int_type(*s)) == eof) 
+        break;
+      ++s;
+      ++i;
+    } 
+    else {
+      std::streamsize chunk_size = std::min(
+        this->eoutp - this->noutp, n - i
+      );
+      traits_type::copy(this->noutp, s, chunk_size);
+      this->noutp += chunk_size;
+      s += chunk_size;
+      i += chunk_size;
     }
-    return i;
+  }
+  return i;
 }
 
 template <typename Char, typename Traits>
 typename basic_streambuf<Char, Traits>::int_type
 basic_streambuf<Char, Traits>::overflow(int_type) {
-    return traits_type::eof();
+  return traits_type::eof();
 }
 
 extern template class basic_streambuf<char>;

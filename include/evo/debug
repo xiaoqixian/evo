@@ -46,8 +46,8 @@
 
 template <typename... Args>
 std::string debug(std::string M, Args... args) {
-    std::string out;
-    
+  std::string out;
+  
 }
 
 #endif

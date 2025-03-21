@@ -15,14 +15,14 @@ struct coroutine_traits_sfinae {};
 
 template <typename T>
 struct coroutine_traits_sfinae<T, 
-    typename evo::void_t<typename T::promise_type>::type>
+  typename evo::void_t<typename T::promise_type>::type>
 {
-    using promise_type = typename T::promise_type;
+  using promise_type = typename T::promise_type;
 };
 
 template <typename Ret, typename... Args>
 struct coroutine_traits: 
-    public coroutine_traits_sfinae<Ret> {};
+  public coroutine_traits_sfinae<Ret> {};
 
 template <typename Promise = void>
 class coroutine_handle;
@@ -30,42 +30,42 @@ class coroutine_handle;
 template <>
 class coroutine_handle<void> {
 public:
-    bool done() const;
-    void resume();
-    void destroy();
-    void* address() const;
-    static coroutine_handle from_address(void* address);
+  bool done() const;
+  void resume();
+  void destroy();
+  void* address() const;
+  static coroutine_handle from_address(void* address);
 };
 
 template <typename Promise>
 class coroutine_handle: coroutine_handle<void> {
 public:
-    Promise& promise() const;
-    static coroutine_handle from_promise(Promise& promise);
-    static coroutine_handle from_address(void* address);
+  Promise& promise() const;
+  static coroutine_handle from_promise(Promise& promise);
+  static coroutine_handle from_address(void* address);
 };
 
 struct coroutine_state {
-    template <typename Promise, typename... Args>
-    static constexpr Promise
-    construct_promise([[maybe_unused]] Args&&... args) noexcept {
-        if constexpr (evo::is_constructible_v<Promise, Args...>)
-            return Promise(forward<Args>(args)...);
-        else 
-            return Promise();
-    }
+  template <typename Promise, typename... Args>
+  static constexpr Promise
+  construct_promise([[maybe_unused]] Args&&... args) noexcept {
+    if constexpr (evo::is_constructible_v<Promise, Args...>)
+      return Promise(forward<Args>(args)...);
+    else 
+      return Promise();
+  }
 
-    template <typename Promise, typename... Args>
-    static constexpr void*
-    promise_allocate(size_t size, [[maybe_unused]] Args&&... args) noexcept {
-        if constexpr (requires { Promise::operator new(size, forward<Args>(args)...); }) {
-            return Promise::operator new(size, forward<Args>(args)...);
-        } else {
-            return Promise::operator new(size);
-        }
+  template <typename Promise, typename... Args>
+  static constexpr void*
+  promise_allocate(size_t size, [[maybe_unused]] Args&&... args) noexcept {
+    if constexpr (requires { Promise::operator new(size, forward<Args>(args)...); }) {
+      return Promise::operator new(size, forward<Args>(args)...);
+    } else {
+      return Promise::operator new(size);
     }
+  }
 
-    constexpr coroutine_state() noexcept = default;
+  constexpr coroutine_state() noexcept = default;
 };
 
 } // end of namespace evo.
