@@ -16,5 +16,5 @@ foreach (test_src ${EVO_TEST_SRC})
   message(STATUS "Add test ${test_name}")
   add_executable(${test_name} EXCLUDE_FROM_ALL ${test_src})
 
-  target_link_libraries(${test_name} evo gtest)
+  target_link_libraries(${test_name} gtest)
 endforeach ()

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CMAKE_CXX_COMPILER /usr/bin/clang++-18)
-set(CMAKE_C_COMPILER /usr/bin/clang-18)
+set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+set(CMAKE_C_COMPILER /usr/bin/clang)
 # file(READ "/etc/os-release" OS_RELEASE_CONTENT)
 # if(OS_RELEASE_CONTENT MATCHES "Ubuntu")
 #   message("This is an Ubuntu system")
@@ -21,14 +21,14 @@ set(EVO_THIRD_PARTY_INCLUDE_DIR
 file(GLOB evo_src "${PROJECT_SOURCE_DIR}/src/*.cpp")
 file(GLOB evo_coro_src "${PROJECT_SOURCE_DIR}/src/coroutine/*.cpp")
 
-include_directories(evo PUBLIC ${EVO_INCLUDE_DIR} ${EVO_THIRD_PARTY_INCLUDE_DIR})
+include_directories(${EVO_INCLUDE_DIR} ${EVO_THIRD_PARTY_INCLUDE_DIR})
 
 add_subdirectory(third_party)
 add_subdirectory(test)
 
-add_library(
-  evo
-  SHARED
-  ${evo_src}
-  ${evo_coro_src}
-)
+# add_library(
+#   evo
+#   SHARED
+#   ${evo_src}
+#   ${evo_coro_src}
+# )

@@ -8,4 +8,6 @@
 int main() {
   evo::string s("hello");
   printf("%s\n", s.c_str());
+  evo::string s2("this is a really long string, this is a really long string");
+  printf("%s\n", s2.c_str());
 }
