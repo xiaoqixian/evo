@@ -83,7 +83,7 @@ private:
 
   void _init(char const* s, size_type size, size_type reserve);
   void _init(char const* s, size_type size);
-  void _init(char c, size_t n);
+  void _init(size_t n, char c);
 
   void _throw_length_error() {
     throw std::runtime_error("string length error");
@@ -95,6 +95,10 @@ public:
 
   constexpr basic_string(char const* str) {
     _init(str, std::strlen(str));
+  }
+
+  constexpr basic_string(size_t n, char c) {
+    _init(n, c);
   }
 
   size_type max_size() const noexcept {
@@ -131,7 +135,7 @@ void basic_string<Alloc>::_init(char const* s, size_type size) {
   }
   else {
     p = std::allocator_traits<allocator_type>::allocate(_alloc(), size);
-    meta_.first().l_str_.is_long_ = false;
+    meta_.first().l_str_.is_long_ = true;
     meta_.first().l_str_.cap_     = size;
     meta_.first().l_str_.size_    = size;
     meta_.first().l_str_.data_    = p;
@@ -140,6 +144,31 @@ void basic_string<Alloc>::_init(char const* s, size_type size) {
   _copy(p, s, size);
   // put end of the str
   p[size] = '\0';
+}
+
+template <typename Alloc>
+void basic_string<Alloc>::_init(size_t n, char c) {
+  if (n > max_size()) {
+    _throw_length_error();
+  }
+
+  char* p = nullptr;
+  if (_fits_sso(n)) {
+    meta_.first().s_str_.is_long_ = false;
+    meta_.first().s_str_.size_    = n;
+    p                             = &meta_.first().s_str_.data_[0];
+  }
+  else {
+    p = std::allocator_traits<allocator_type>::allocate(_alloc(), n);
+    meta_.first().l_str_.is_long_ = true;
+    meta_.first().l_str_.cap_     = n;
+    meta_.first().l_str_.size_    = n;
+    meta_.first().l_str_.data_    = p;
+  }
+
+  std::memset(p, c, n);
+  // put end of the str
+  p[n] = '\0';
 }
 
 using string = basic_string<allocator<char>>;

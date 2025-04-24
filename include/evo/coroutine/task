@@ -20,11 +20,10 @@ template <typename Ret>
 struct task_promise;
 
 template <typename Ret>
-using task_promise_base = 
-evo::promise_base<Ret>;
+using task_promise_base = evo::promise_base<Ret>;
 
 template <typename Ret>
-struct task_promise: public task_promise_base<Ret> {
+struct task_promise: task_promise_base<Ret> {
   std::coroutine_handle<> continuation;
 
   task<Ret> get_return_object() {
@@ -40,15 +39,15 @@ struct task_promise: public task_promise_base<Ret> {
     // with a continuation. 
     // TODO: I'll try to add a constraint here.
     template <typename P>
-      std::coroutine_handle<> 
-      await_suspend(std::coroutine_handle<P> coro) noexcept {
-        auto const& prom = coro.promise();
-        if ( prom.continuation != nullptr ) {
-          return prom.continuation;
-        } else {
-          return std::noop_coroutine();
-        }
+    std::coroutine_handle<> 
+    await_suspend(std::coroutine_handle<P> coro) noexcept {
+      auto const& prom = coro.promise();
+      if ( prom.continuation != nullptr ) {
+        return prom.continuation;
+      } else {
+        return std::noop_coroutine();
       }
+    }
 
     inline constexpr void await_resume() const noexcept {}
   };
@@ -68,8 +67,8 @@ struct task_promise: public task_promise_base<Ret> {
 template <typename Ret>
 class task {
 public:
-  typedef task_impl::task_promise<Ret> promise_type;
-  typedef std::coroutine_handle<promise_type> handle_t;
+  using promise_t = task_impl::task_promise<Ret>;
+  using handle_t  = std::coroutine_handle<promise_t>;
 
   constexpr task() noexcept: handle(nullptr) {}
   explicit constexpr task(handle_t h) noexcept: handle(h) {}
@@ -112,10 +111,10 @@ public:
     }
 
     std::coroutine_handle<> 
-      await_suspend(std::coroutine_handle<> continuation) noexcept {
-        this->handle.promise().set_continuation(continuation);
-        return this->handle;
-      }
+    await_suspend(std::coroutine_handle<> continuation) noexcept {
+      this->handle.promise().set_continuation(continuation);
+      return this->handle;
+    }
   };
 
   template <typename R = Ret>

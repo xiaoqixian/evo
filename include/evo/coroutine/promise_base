@@ -28,11 +28,11 @@ struct promise_base_base {
   // }
 
   auto initial_suspend() const noexcept {
-    return std::suspend_always();
+    return std::suspend_always {};
   }
 
   auto final_suspend() const noexcept {
-    return std::suspend_always();
+    return std::suspend_always {};
   }
 };
 
