@@ -38,6 +38,25 @@ struct shared_count {
   }
   
   virtual void on_zero_shared() noexcept = 0;
+
+protected:
+  virtual ~shared_count();
+};
+
+struct shared_weak_count: private shared_count {
+  std::atomic_long weak_count_ {0};
+
+  void add_weak() noexcept {
+    weak_count_.fetch_add(1);
+  }
+
+  shared_weak_count* lock() noexcept;
+
+private:
+  virtual void on_zero_shared_weak() noexcept = 0;
+
+protected:
+  ~shared_weak_count() override;
 };
 
 template <typename T>
