@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <type_traits>
 #include <utility>
 #include <cassert>
@@ -15,6 +16,8 @@ namespace evo {
 
 template <typename T>
 class shared_ptr;
+
+namespace {
 
 class shared_count {
 protected:
@@ -25,7 +28,7 @@ public:
   }
 
   bool release_shared() noexcept {
-    if (shared_owners_.fetch_sub(1) == 0) {
+    if (shared_owners_.fetch_sub(1) == -1) {
       on_zero_shared();
       return true;
     }
@@ -33,7 +36,7 @@ public:
   }
 
   long use_count() const noexcept {
-    return shared_owners_.load();
+    return shared_owners_.load() + 1;
   }
   
   /**
@@ -42,7 +45,7 @@ public:
   virtual void on_zero_shared() noexcept = 0;
 
 protected:
-  virtual ~shared_count();
+  virtual ~shared_count() {}
 };
 
 class shared_weak_count: private shared_count {
@@ -68,7 +71,7 @@ public:
   }
 
   bool release_weak() {
-    if (shared_weak_owners_.fetch_sub(1) == 0) {
+    if (shared_weak_owners_.fetch_sub(1) == -1) {
       on_zero_shared_weak();
       return true;
     }
@@ -92,13 +95,13 @@ private:
   virtual void on_zero_shared_weak() noexcept = 0;
 
 protected:
-  ~shared_weak_count() override;
+  ~shared_weak_count() override {}
 };
 
 template <typename T>
-struct shared_ptr_pointer: shared_weak_count {
+class shared_ptr_pointer: public shared_weak_count {
   T* ptr_ {nullptr};
-
+public:
   template <typename U>
   requires std::is_convertible_v<U*, T*>
   shared_ptr_pointer(U* ptr): ptr_(ptr) {}
@@ -113,9 +116,10 @@ struct shared_ptr_pointer: shared_weak_count {
 };
 
 template <typename T>
-struct shared_ptr_emplace: shared_weak_count {
+class shared_ptr_emplace: public shared_weak_count {
   T storage_;
 
+public:
   template <typename... Args>
   requires std::is_constructible_v<T, Args...>
   shared_ptr_emplace(Args&&... args): storage_(std::forward<Args>(args)...) {}
@@ -133,6 +137,7 @@ struct shared_ptr_emplace: shared_weak_count {
   }
 };
 
+} // end of anonymouse namespace
 
 template <typename T>
 class weak_ptr;
@@ -142,89 +147,74 @@ class shared_ptr {
   friend class build_helper;
 
   using element_type = std::remove_extent_t<T>;
-  using pointer = T*;
-  using const_pointer = T const*;
-  using reference = T&;
-  using const_reference = T const&;
+  using pointer = element_type*;
+  using const_pointer = element_type const*;
+  using reference = element_type&;
+  using const_reference = element_type const&;
 
-  using ctrl_block = shared_count;
+  using ctrl_block = shared_weak_count;
 
   pointer ptr_ {nullptr};
   ctrl_block* ctrl_ {nullptr};
 public:
-  shared_ptr() noexcept = default;
+  constexpr shared_ptr() noexcept = default;
+  constexpr shared_ptr(std::nullptr_t) noexcept;
 
   template <typename U>
   requires std::is_convertible_v<U*, pointer>
-  shared_ptr(U* ptr): ptr_(ptr) {
-    ctrl_ = new shared_ptr_pointer(ptr);
-  }
+  explicit shared_ptr(U* ptr);
 
-  shared_ptr(shared_ptr const& other) noexcept {
-    ptr_ = other.ptr_;
-    ctrl_ = other.ctrl_;
-    if (ctrl_)
-      ctrl_->add_shared();
-  }
+  shared_ptr(shared_ptr const&) noexcept;
+  shared_ptr(shared_ptr &&) noexcept;
 
-  shared_ptr(shared_ptr && other) noexcept {
-    ptr_ = std::exchange(other.ptr_, nullptr);
-    ctrl_ = std::exchange(other.ctrl_, nullptr);
-  }
+  template <typename U>
+  requires std::is_convertible_v<typename shared_ptr<U>::pointer, pointer>
+  shared_ptr(shared_ptr<U> const&) noexcept;
 
-  shared_ptr& operator=(shared_ptr const& other) noexcept {
-    shared_ptr(other).swap(*this);
-    return *this;
-  }
+  template <typename U>
+  requires std::is_convertible_v<typename shared_ptr<U>::pointer, pointer>
+  shared_ptr(shared_ptr<U> &&) noexcept;
 
-  shared_ptr& operator=(shared_ptr && other) noexcept {
-    shared_ptr(std::move(other)).swap(*this);
-    return *this;
-  }
+  template <typename U>
+  shared_ptr(shared_ptr<U> const&, pointer ptr) noexcept;
 
-  ~shared_ptr() noexcept {
-    if (ctrl_) {
-      ctrl_->release_shared();
-    }
-  }
+  template <typename U>
+  requires std::is_convertible_v<U*, typename shared_ptr<T>::pointer>
+  explicit shared_ptr(weak_ptr<U> const&);
 
-  pointer get() noexcept {
-    return ptr_;
-  }
-  const_pointer get() const noexcept {
-    return ptr_;
-  }
+  shared_ptr& operator=(shared_ptr const& other) noexcept;
 
-  pointer operator->() noexcept {
-    return get();
-  }
-  const_pointer operator->() const noexcept {
-    return get();
-  }
+  shared_ptr& operator=(shared_ptr && other) noexcept;
 
-  reference operator*() noexcept {
-    return *get();
-  }
-  const_reference operator*() const noexcept {
-    return *get();
-  }
+  ~shared_ptr() noexcept;
 
-  void swap(shared_ptr& other) noexcept {
-    std::swap(ptr_, other.ptr_);
-    std::swap(ctrl_, other.ctrl_);
-  }
+  pointer get() noexcept;
+  const_pointer get() const noexcept;
 
-  void reset() noexcept {
-    shared_ptr().swap(*this);
-  }
+  pointer operator->() noexcept;
+  const_pointer operator->() const noexcept;
+
+  T& operator*() noexcept;
+  T const& operator*() const noexcept;
+
+  reference operator[](std::ptrdiff_t idx) const;
+
+  explicit operator bool() const noexcept;
+
+  void swap(shared_ptr& other) noexcept;
+
+  void reset() noexcept;
+
+  long use_count() const noexcept;
+
+  template <typename U>
+  bool owner_before(shared_ptr<U> const&) const noexcept;
+
+  template <typename U>
+  bool owner_before(weak_ptr<U> const&) const noexcept;
 
   template <typename Y, typename CtrlBlk>
-  static shared_ptr<T> __create_with_control_block(Y* ptr, CtrlBlk* ctrl_blk) {
-    shared_ptr<T> res;
-    res.ptr_ = ptr;
-    res.ctrl_ = ctrl_blk;
-    return res;
-  }
+  static shared_ptr<T> __create_with_control_block(Y* ptr, CtrlBlk* ctrl_blk);
 };
 
 template <typename T>
@@ -273,6 +263,167 @@ public:
   template <typename Y>
   bool owner_before(shared_ptr<Y> const&) const noexcept;
 };
+
+// implementation of shared_ptr
+template <typename T>
+constexpr shared_ptr<T>::shared_ptr(std::nullptr_t) noexcept {}
+
+template <typename T>
+template <typename U>
+requires std::is_convertible_v<U*, typename shared_ptr<T>::pointer>
+shared_ptr<T>::shared_ptr(U* ptr)
+  : ptr_(ptr)
+{
+  ctrl_ = new shared_ptr_pointer<U>(ptr);
+}
+
+template <typename T>
+shared_ptr<T>::shared_ptr(shared_ptr const& other) noexcept 
+  : ptr_(other.ptr_),
+    ctrl_(other.ctrl_)
+{
+  if (ctrl_) ctrl_->add_shared();
+}
+
+template <typename T>
+shared_ptr<T>::shared_ptr(shared_ptr && other) noexcept 
+  : ptr_(std::exchange(other.ptr_, nullptr)),
+    ctrl_(std::exchange(other.ctrl_, nullptr))
+{}
+
+template <typename T>
+template <typename U>
+requires std::is_convertible_v<typename shared_ptr<U>::pointer, typename shared_ptr<T>::pointer>
+shared_ptr<T>::shared_ptr(shared_ptr<U> const& other) noexcept 
+  : ptr_(other.ptr_),
+    ctrl_(other.ctrl_)
+{
+  if (ctrl_) ctrl_->add_shared();
+}
+
+template <typename T>
+template <typename U>
+requires std::is_convertible_v<typename shared_ptr<U>::pointer, typename shared_ptr<T>::pointer>
+shared_ptr<T>::shared_ptr(shared_ptr<U> && other) noexcept 
+  : ptr_(std::exchange(other.ptr_, nullptr)),
+    ctrl_(std::exchange(other.ctrl_, nullptr))
+{}
+
+template <typename T>
+template <typename U>
+shared_ptr<T>::shared_ptr(shared_ptr<U> const& other, pointer ptr) noexcept 
+  : ptr_(ptr),
+    ctrl_(other.ctrl_)
+{
+  if (ctrl_) ctrl_->add_shared();
+}
+
+template <typename T>
+template <typename U>
+requires std::is_convertible_v<U*, typename shared_ptr<T>::pointer>
+shared_ptr<T>::shared_ptr(weak_ptr<U> const& weak) 
+  : ptr_(weak.ptr_),
+    ctrl_(weak.ctrl_ ? weak.ctrl_->lock() : nullptr)
+{
+  if (ctrl_ == nullptr) {
+    throw std::bad_weak_ptr();
+  }
+}
+
+template <typename T>
+shared_ptr<T>& shared_ptr<T>::operator=(shared_ptr const& other) noexcept {
+  shared_ptr(other).swap(*this);
+  return *this;
+}
+
+template <typename T>
+shared_ptr<T>& shared_ptr<T>::operator=(shared_ptr && other) noexcept {
+  shared_ptr(std::move(other)).swap(*this);
+  return *this;
+}
+
+template <typename T>
+shared_ptr<T>::~shared_ptr() noexcept {
+  if (ctrl_) ctrl_->release_shared();
+}
+
+template <typename T>
+typename shared_ptr<T>::pointer shared_ptr<T>::get() noexcept {
+  return ptr_;
+}
+
+template <typename T>
+typename shared_ptr<T>::const_pointer shared_ptr<T>::get() const noexcept {
+  return ptr_;
+}
+
+template <typename T>
+typename shared_ptr<T>::pointer shared_ptr<T>::operator->() noexcept {
+  return get();
+}
+
+template <typename T>
+typename shared_ptr<T>::const_pointer shared_ptr<T>::operator->() const noexcept {
+  return get();
+}
+
+template <typename T>
+T& shared_ptr<T>::operator*() noexcept {
+  return *get();
+}
+
+template <typename T>
+T const& shared_ptr<T>::operator*() const noexcept {
+  return *get();
+}
+
+template <typename T>
+typename shared_ptr<T>::reference shared_ptr<T>::operator[](std::ptrdiff_t idx) const {
+  return ptr_[idx];
+}
+
+template <typename T>
+shared_ptr<T>::operator bool() const noexcept {
+  return ctrl_ != nullptr;
+}
+
+template <typename T>
+void shared_ptr<T>::swap(shared_ptr& other) noexcept {
+  std::swap(ptr_, other.ptr_);
+  std::swap(ctrl_, other.ctrl_);
+}
+
+template <typename T>
+void shared_ptr<T>::reset() noexcept {
+  shared_ptr().swap(*this);
+}
+
+template <typename T>
+long shared_ptr<T>::use_count() const noexcept {
+  return ctrl_ ? ctrl_->use_count() : 0;
+}
+
+template <typename T>
+template <typename U>
+bool shared_ptr<T>::owner_before(shared_ptr<U> const& other) const noexcept {
+  return ctrl_ < other.ctrl_;
+}
+
+template <typename T>
+template <typename U>
+bool shared_ptr<T>::owner_before(weak_ptr<U> const& other) const noexcept {
+  return ctrl_ < other.ctrl_;
+}
+
+template <typename T>
+template <typename Y, typename CtrlBlk>
+shared_ptr<T> shared_ptr<T>::__create_with_control_block(Y* ptr, CtrlBlk* ctrl_blk) {
+  shared_ptr<T> res;
+  res.ptr_ = ptr;
+  res.ctrl_ = ctrl_blk;
+  return res;
+}
+// implementation of weak_ptr
 
 template <typename T>
 constexpr weak_ptr<T>::weak_ptr(weak_ptr const& other) noexcept
