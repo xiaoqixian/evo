@@ -6,7 +6,7 @@ include(GoogleTest)
 
 set(CMAKE_CXX_STANDARD 20)
 
-file(GLOB_RECURSE EVO_TEST_SRC "${PROJECT_SOURCE_DIR}/test/*test.cpp")
+file(GLOB_RECURSE EVO_TEST_SRC "${PROJECT_SOURCE_DIR}/test/*.cpp")
 
 foreach (test_src ${EVO_TEST_SRC})
   # extract the test SOURCE filename, remove the suffix to create a test name
