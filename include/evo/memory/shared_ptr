@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "evo/memory/compressed_pair"
+#include "evo/memory/unique_ptr"
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -33,6 +35,15 @@ concept raw_pointer_compatible_with =
   (!std::is_array_v<T> && std::is_convertible_v<Y*, T*>) ||
   (std::is_bounded_array_v<T> && std::is_convertible_v<Y(*)[std::extent_v<T>], std::remove_extent_t<T>(*)[std::extent_v<T>]>) ||
   (std::is_unbounded_array_v<T> && std::is_convertible_v<Y(*)[], std::remove_extent_t<T>(*)[]>);
+
+template <typename, typename Y>
+struct shared_ptr_default_delete: default_delete<Y> {};
+
+template <typename U, typename Y>
+struct shared_ptr_default_delete<U[], Y>: default_delete<U[]> {};
+
+template <typename U, size_t N, typename Y>
+struct shared_ptr_default_delete<U[N], Y>: default_delete<U[]> {};
 
 class shared_count {
 protected:
@@ -113,20 +124,17 @@ protected:
   ~shared_weak_count() override {}
 };
 
-template <typename T>
+template <typename T, typename D>
 class shared_ptr_pointer: public shared_weak_count {
-  T* ptr_ {nullptr};
+  compressed_pair<T*, D> data_;
 public:
-  template <compatible_with<T> Y>
-  shared_ptr_pointer(Y* ptr): ptr_(ptr) {}
+  shared_ptr_pointer(T* ptr, D d): 
+    data_(ptr, std::move(d)) 
+  {}
 
-  virtual void on_zero_shared() noexcept override {
-    if (ptr_) delete ptr_;
-  }
+  virtual void on_zero_shared() noexcept override;
 
-  virtual void on_zero_shared_weak() noexcept override {
-    ::operator delete(this);
-  }
+  virtual void on_zero_shared_weak() noexcept override;
 };
 
 template <typename T>
@@ -138,18 +146,60 @@ public:
   requires std::is_constructible_v<T, Args...>
   shared_ptr_emplace(Args&&... args): storage_(std::forward<Args>(args)...) {}
   
-  virtual void on_zero_shared() noexcept override {
-    storage_.~T();
-  }
+  virtual void on_zero_shared() noexcept override;
 
-  virtual void on_zero_shared_weak() noexcept override {
-    ::operator delete(this);
-  }
+  virtual void on_zero_shared_weak() noexcept override;
 
   T* get_elem() {
     return &storage_;
   }
 };
+
+template <typename T>
+struct array_ctrl_block;
+
+template <typename T>
+requires std::is_default_constructible_v<T>
+struct array_ctrl_block<T[]>: shared_weak_count {
+  array_ctrl_block(size_t);
+
+  virtual void on_zero_shared() noexcept;
+  virtual void on_zero_shared_weak() noexcept;
+private:
+  size_t count_;
+  T data_[1];
+};
+
+template <typename T, size_t N>
+requires std::is_default_constructible_v<T>
+struct array_ctrl_block<T[N]> {
+  array_ctrl_block();
+private:
+  T data_[N];
+};
+
+template <typename T, typename D>
+void shared_ptr_pointer<T, D>::on_zero_shared() noexcept {
+  T* ptr = data_.first();
+  if (ptr) {
+    data_.second()(ptr);
+  }
+}
+
+template <typename T, typename D>
+void shared_ptr_pointer<T, D>::on_zero_shared_weak() noexcept {
+  ::operator delete(this);
+}
+
+template <typename T>
+void shared_ptr_emplace<T>::on_zero_shared() noexcept {
+  storage_.~T();
+}
+
+template <typename T>
+void shared_ptr_emplace<T>::on_zero_shared_weak() noexcept {
+  ::operator delete(this);
+}
 
 } // end of anonymouse namespace
 
@@ -291,7 +341,8 @@ template <raw_pointer_compatible_with<T> Y>
 shared_ptr<T>::shared_ptr(Y* ptr)
   : ptr_(ptr)
 {
-  ctrl_ = new shared_ptr_pointer<Y>(ptr);
+  using Deleter = shared_ptr_default_delete<T, Y>;
+  ctrl_ = new shared_ptr_pointer<Y, Deleter>(ptr, {});
 }
 
 template <typename T>
@@ -568,9 +619,16 @@ inline bool operator!=(shared_ptr<T> const& p1, std::nullptr_t) noexcept {
 }
 
 template <typename T, typename... Args>
-requires std::is_constructible_v<T, Args...>
+requires (!std::is_array_v<T> && std::is_constructible_v<T, Args...>)
 shared_ptr<T> make_shared(Args&&... args) {
   shared_ptr_emplace<T>* ctrl = new shared_ptr_emplace<T>(std::forward<Args>(args)...);
+  return shared_ptr<T>::template __create_with_control_block<T, shared_ptr_emplace<T>>(ctrl->get_elem(), ctrl);
+}
+
+template <typename T, typename... Args>
+requires (std::is_array_v<T> && std::is_convertible_v<T, Args...>)
+shared_ptr<T> make_shared(Args&&... args) {
+  array_ctrl_block<T>* ctrl = new array_ctrl_block<T>(std::forward<Args>(args)...);
   return shared_ptr<T>::template __create_with_control_block<T, shared_ptr_emplace<T>>(ctrl->get_elem(), ctrl);
 }
 

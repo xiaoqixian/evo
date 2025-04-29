@@ -10,11 +10,10 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
-#include <stdio.h>
+#include <cstring>
+#include <cstdio>
 #include <errno.h>
-#include <string.h>
 #include <stdlib.h>
-#include <string>
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
@@ -43,11 +42,5 @@
 #define CHECK_DEBUG(A, M, ...) if (!(A)) { DEBUG(M, ##__VA_ARGS__);}
 
 #define ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
-
-template <typename... Args>
-std::string debug(std::string M, Args... args) {
-  std::string out;
-  
-}
 
 #endif

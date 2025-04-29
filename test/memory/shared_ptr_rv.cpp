@@ -1,4 +1,4 @@
-// Date:   Tue Apr 29 02:31:28 PM 2025
+// Date:   Tue Apr 29 20:23:04 2025
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
@@ -10,11 +10,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++03
+
 // <memory>
 
 // shared_ptr
 
-// template<class Y> shared_ptr& operator=(const shared_ptr<Y>& r);
+// shared_ptr& operator=(shared_ptr&& r);
 
 #include <gtest/gtest.h>
 #include "evo/memory/shared_ptr"
@@ -42,37 +44,18 @@ struct A
 
 int A::count = 0;
 
-TEST(SharedPtrTest, SharedPtrY) {
+TEST(SharedPtrTest, SharedPtrRv) {
   {
-    const evo::shared_ptr<A> pA(new A);
+    std::shared_ptr<A> pA(new A);
     A* ptrA = pA.get();
     {
-      evo::shared_ptr<B> pB(new B);
-      pB = pA;
+      std::shared_ptr<A> pB(new A);
+      pB = std::move(pA);
       ASSERT_TRUE(B::count == 1);
       ASSERT_TRUE(A::count == 1);
-      ASSERT_TRUE(pB.use_count() == 2);
-      ASSERT_TRUE(pA.use_count() == 2);
-      ASSERT_TRUE(pA.get() == pB.get());
-      ASSERT_TRUE(pB.get() == ptrA);
-    }
-    ASSERT_TRUE(pA.use_count() == 1);
-    ASSERT_TRUE(B::count == 1);
-    ASSERT_TRUE(A::count == 1);
-  }
-  ASSERT_TRUE(B::count == 0);
-  ASSERT_TRUE(A::count == 0);
-  {
-    const evo::shared_ptr<A> pA;
-    A* ptrA = pA.get();
-    {
-      evo::shared_ptr<B> pB(new B);
-      pB = pA;
-      ASSERT_TRUE(B::count == 0);
-      ASSERT_TRUE(A::count == 0);
-      ASSERT_TRUE(pB.use_count() == 0);
+      ASSERT_TRUE(pB.use_count() == 1);
       ASSERT_TRUE(pA.use_count() == 0);
-      ASSERT_TRUE(pA.get() == pB.get());
+      ASSERT_TRUE(pA.get() == 0);
       ASSERT_TRUE(pB.get() == ptrA);
     }
     ASSERT_TRUE(pA.use_count() == 0);
@@ -82,35 +65,16 @@ TEST(SharedPtrTest, SharedPtrY) {
   ASSERT_TRUE(B::count == 0);
   ASSERT_TRUE(A::count == 0);
   {
-    const evo::shared_ptr<A> pA(new A);
+    std::shared_ptr<A> pA;
     A* ptrA = pA.get();
     {
-      evo::shared_ptr<B> pB;
-      pB = pA;
-      ASSERT_TRUE(B::count == 1);
-      ASSERT_TRUE(A::count == 1);
-      ASSERT_TRUE(pB.use_count() == 2);
-      ASSERT_TRUE(pA.use_count() == 2);
-      ASSERT_TRUE(pA.get() == pB.get());
-      ASSERT_TRUE(pB.get() == ptrA);
-    }
-    ASSERT_TRUE(pA.use_count() == 1);
-    ASSERT_TRUE(B::count == 1);
-    ASSERT_TRUE(A::count == 1);
-  }
-  ASSERT_TRUE(B::count == 0);
-  ASSERT_TRUE(A::count == 0);
-  {
-    const evo::shared_ptr<A> pA;
-    A* ptrA = pA.get();
-    {
-      evo::shared_ptr<B> pB;
-      pB = pA;
+      std::shared_ptr<A> pB(new A);
+      pB = std::move(pA);
       ASSERT_TRUE(B::count == 0);
       ASSERT_TRUE(A::count == 0);
       ASSERT_TRUE(pB.use_count() == 0);
       ASSERT_TRUE(pA.use_count() == 0);
-      ASSERT_TRUE(pA.get() == pB.get());
+      ASSERT_TRUE(pA.get() == 0);
       ASSERT_TRUE(pB.get() == ptrA);
     }
     ASSERT_TRUE(pA.use_count() == 0);
@@ -119,22 +83,42 @@ TEST(SharedPtrTest, SharedPtrY) {
   }
   ASSERT_TRUE(B::count == 0);
   ASSERT_TRUE(A::count == 0);
-
   {
-    evo::shared_ptr<A[]> p1(new A[8]);
-    A* ptr = p1.get();
-    ASSERT_TRUE(A::count == 8);
+    std::shared_ptr<A> pA(new A);
+    A* ptrA = pA.get();
     {
-      evo::shared_ptr<const A[]> p2;
-      p2 = p1;
-      ASSERT_TRUE(A::count == 8);
-      ASSERT_TRUE(p2.use_count() == 2);
-      ASSERT_TRUE(p1.use_count() == 2);
-      ASSERT_TRUE(p1.get() == p2.get());
-      ASSERT_TRUE(p2.get() == ptr);
+      std::shared_ptr<A> pB;
+      pB = std::move(pA);
+      ASSERT_TRUE(B::count == 1);
+      ASSERT_TRUE(A::count == 1);
+      ASSERT_TRUE(pB.use_count() == 1);
+      ASSERT_TRUE(pA.use_count() == 0);
+      ASSERT_TRUE(pA.get() == 0);
+      ASSERT_TRUE(pB.get() == ptrA);
     }
-    ASSERT_TRUE(p1.use_count() == 1);
-    ASSERT_TRUE(A::count == 8);
+    ASSERT_TRUE(pA.use_count() == 0);
+    ASSERT_TRUE(B::count == 0);
+    ASSERT_TRUE(A::count == 0);
   }
+  ASSERT_TRUE(B::count == 0);
+  ASSERT_TRUE(A::count == 0);
+  {
+    std::shared_ptr<A> pA;
+    A* ptrA = pA.get();
+    {
+      std::shared_ptr<A> pB;
+      pB = std::move(pA);
+      ASSERT_TRUE(B::count == 0);
+      ASSERT_TRUE(A::count == 0);
+      ASSERT_TRUE(pB.use_count() == 0);
+      ASSERT_TRUE(pA.use_count() == 0);
+      ASSERT_TRUE(pA.get() == 0);
+      ASSERT_TRUE(pB.get() == ptrA);
+    }
+    ASSERT_TRUE(pA.use_count() == 0);
+    ASSERT_TRUE(B::count == 0);
+    ASSERT_TRUE(A::count == 0);
+  }
+  ASSERT_TRUE(B::count == 0);
   ASSERT_TRUE(A::count == 0);
 }

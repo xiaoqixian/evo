@@ -93,8 +93,6 @@ struct default_delete<T[]> {
                 "default_delete cannot delete incomplete type");
         static_assert(!evo::is_void_v<T>, 
                 "default_delete cannot delete incomplete type");
-        
-        DEBUG("calling delete[]")
         delete[] ptr;
     }
 };
