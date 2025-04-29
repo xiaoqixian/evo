@@ -10,3 +10,4 @@ CMakeFiles
 CMakeCache.txt
 .gdb_history
 .cmake
+compile_commands.json

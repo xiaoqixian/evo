@@ -23,10 +23,16 @@ template <typename Y, typename T>
 struct bound_convertible_to_unbound: std::false_type {};
 
 template <typename U, size_t N, typename T>
-struct bound_convertible_to_unbound<U[N], T>: std::is_same<std::remove_cv_t<T>, U[]> {};
+struct bound_convertible_to_unbound<U[N], T>: std::is_same<U[], std::remove_cv_t<T>> {};
 
 template <typename Y, typename T>
 concept compatible_with = std::is_convertible_v<Y*, T*> || bound_convertible_to_unbound<Y, T>::value;
+
+template <typename Y, typename T>
+concept raw_pointer_compatible_with = 
+  (!std::is_array_v<T> && std::is_convertible_v<Y*, T*>) ||
+  (std::is_bounded_array_v<T> && std::is_convertible_v<Y(*)[std::extent_v<T>], std::remove_extent_t<T>(*)[std::extent_v<T>]>) ||
+  (std::is_unbounded_array_v<T> && std::is_convertible_v<Y(*)[], std::remove_extent_t<T>(*)[]>);
 
 class shared_count {
 protected:
@@ -111,8 +117,7 @@ template <typename T>
 class shared_ptr_pointer: public shared_weak_count {
   T* ptr_ {nullptr};
 public:
-  template <typename Y>
-  requires std::is_convertible_v<Y*, T*>
+  template <compatible_with<T> Y>
   shared_ptr_pointer(Y* ptr): ptr_(ptr) {}
 
   virtual void on_zero_shared() noexcept override {
@@ -153,7 +158,11 @@ class weak_ptr;
 
 template <typename T>
 class shared_ptr {
-  friend class weak_ptr<T>;
+  template <typename Y>
+  friend class shared_ptr;
+
+  template <typename Y>
+  friend class weak_ptr;
 
   using element_type = std::remove_extent_t<T>;
   using pointer = element_type*;
@@ -169,26 +178,22 @@ public:
   constexpr shared_ptr() noexcept = default;
   constexpr shared_ptr(std::nullptr_t) noexcept;
 
-  template <typename Y>
-  requires std::is_convertible_v<Y*, pointer>
+  template <raw_pointer_compatible_with<T> Y>
   explicit shared_ptr(Y* ptr);
 
   shared_ptr(shared_ptr const&) noexcept;
   shared_ptr(shared_ptr &&) noexcept;
 
-  template <typename Y>
-  requires std::is_convertible_v<typename shared_ptr<Y>::pointer, pointer>
+  template <compatible_with<T> Y>
   shared_ptr(shared_ptr<Y> const&) noexcept;
 
-  template <typename Y>
-  requires std::is_convertible_v<typename shared_ptr<Y>::pointer, pointer>
+  template <compatible_with<T> Y>
   shared_ptr(shared_ptr<Y> &&) noexcept;
 
-  template <typename Y>
+  template <compatible_with<T> Y>
   shared_ptr(shared_ptr<Y> const&, pointer ptr) noexcept;
 
-  template <typename Y>
-  requires std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+  template <compatible_with<T> Y>
   explicit shared_ptr(weak_ptr<Y> const&);
 
   ~shared_ptr() noexcept;
@@ -196,12 +201,10 @@ public:
   shared_ptr& operator=(shared_ptr const& other) noexcept;
   shared_ptr& operator=(shared_ptr && other) noexcept;
 
-  template <typename Y>
-  requires (!std::is_array_v<T>) && std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+  template <compatible_with<T> Y>
   shared_ptr& operator=(shared_ptr<Y> const& other) noexcept;
 
-  template <typename Y>
-  requires (!std::is_array_v<T>) && std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+  template <compatible_with<T> Y>
   shared_ptr& operator=(shared_ptr<Y> && other) noexcept;
 
   pointer get() const noexcept;
@@ -251,12 +254,10 @@ public:
   template <typename Y>
   weak_ptr(shared_ptr<Y> const&) noexcept;
 
-  template <typename Y>
-  requires std::is_convertible_v<Y*, pointer>
+  template <compatible_with<T> Y>
   weak_ptr(weak_ptr<Y> const&) noexcept;
 
-  template <typename Y>
-  requires std::is_convertible_v<Y*, pointer>
+  template <compatible_with<T> Y>
   weak_ptr(weak_ptr<Y> &&) noexcept;
 
   ~weak_ptr();
@@ -286,8 +287,7 @@ template <typename T>
 constexpr shared_ptr<T>::shared_ptr(std::nullptr_t) noexcept {}
 
 template <typename T>
-template <typename Y>
-requires std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+template <raw_pointer_compatible_with<T> Y>
 shared_ptr<T>::shared_ptr(Y* ptr)
   : ptr_(ptr)
 {
@@ -309,8 +309,7 @@ shared_ptr<T>::shared_ptr(shared_ptr && other) noexcept
 {}
 
 template <typename T>
-template <typename Y>
-requires std::is_convertible_v<typename shared_ptr<Y>::pointer, typename shared_ptr<T>::pointer>
+template <compatible_with<T> Y>
 shared_ptr<T>::shared_ptr(shared_ptr<Y> const& other) noexcept 
   : ptr_(other.ptr_),
     ctrl_(other.ctrl_)
@@ -319,15 +318,14 @@ shared_ptr<T>::shared_ptr(shared_ptr<Y> const& other) noexcept
 }
 
 template <typename T>
-template <typename Y>
-requires std::is_convertible_v<typename shared_ptr<Y>::pointer, typename shared_ptr<T>::pointer>
+template <compatible_with<T> Y>
 shared_ptr<T>::shared_ptr(shared_ptr<Y> && other) noexcept 
   : ptr_(std::exchange(other.ptr_, nullptr)),
     ctrl_(std::exchange(other.ctrl_, nullptr))
 {}
 
 template <typename T>
-template <typename Y>
+template <compatible_with<T> Y>
 shared_ptr<T>::shared_ptr(shared_ptr<Y> const& other, pointer ptr) noexcept 
   : ptr_(ptr),
     ctrl_(other.ctrl_)
@@ -336,8 +334,7 @@ shared_ptr<T>::shared_ptr(shared_ptr<Y> const& other, pointer ptr) noexcept
 }
 
 template <typename T>
-template <typename Y>
-requires std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+template <compatible_with<T> Y>
 shared_ptr<T>::shared_ptr(weak_ptr<Y> const& weak) 
   : ptr_(weak.ptr_),
     ctrl_(weak.ctrl_ ? weak.ctrl_->lock() : nullptr)
@@ -360,16 +357,14 @@ shared_ptr<T>& shared_ptr<T>::operator=(shared_ptr && other) noexcept {
 }
 
 template <typename T>
-template <typename Y>
-requires (!std::is_array_v<T>) && std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+template <compatible_with<T> Y>
 shared_ptr<T>& shared_ptr<T>::operator=(shared_ptr<Y> const& other) noexcept {
   shared_ptr(other).swap(*this);
   return *this;
 }
 
 template <typename T>
-template <typename Y>
-requires (!std::is_array_v<T>) && std::is_convertible_v<Y*, typename shared_ptr<T>::pointer>
+template <compatible_with<T> Y>
 shared_ptr<T>& shared_ptr<T>::operator=(shared_ptr<Y> && other) noexcept {
   shared_ptr(std::move(other)).swap(*this);
   return *this;
@@ -468,8 +463,7 @@ weak_ptr<T>::weak_ptr(weak_ptr && other) noexcept
 {}
 
 template <typename T>
-template <typename Y>
-requires std::is_convertible_v<Y*, typename weak_ptr<T>::pointer>
+template <compatible_with<T> Y>
 weak_ptr<T>::weak_ptr(weak_ptr<Y> const& other) noexcept
   : ptr_(other.ptr_),
     ctrl_(other.ctrl_)
@@ -478,8 +472,7 @@ weak_ptr<T>::weak_ptr(weak_ptr<Y> const& other) noexcept
 }
 
 template <typename T>
-template <typename Y>
-requires std::is_convertible_v<Y*, typename weak_ptr<T>::pointer>
+template <compatible_with<T> Y>
 weak_ptr<T>::weak_ptr(weak_ptr<Y> && other) noexcept
   : ptr_(std::exchange(other.ptr_, nullptr)),
     ctrl_(std::exchange(other.ctrl_, nullptr))
