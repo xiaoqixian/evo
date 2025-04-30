@@ -24,7 +24,6 @@
 // Ignore error about requesting a large alignment not being ABI compatible with older AIX systems.
 
 #include "evo/memory/shared_ptr"
-#include "fmt/core.h"
 #include <gtest/gtest.h>
 
 struct DestroyInReverseOrder {

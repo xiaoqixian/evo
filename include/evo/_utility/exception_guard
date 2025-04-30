@@ -1,0 +1,41 @@
+// -*- C++ -*-
+// Date:   Wed Apr 30 20:30:51 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#include <cstdio>
+#include <utility>
+#include <type_traits>
+
+namespace evo {
+
+template <typename Rollback>
+requires std::is_invocable_v<Rollback>
+class exception_guard {
+public:
+  exception_guard(Rollback rollback): roll_back_(rollback) {}
+
+  exception_guard(exception_guard && other)
+    : complete_(std::exchange(other.complete_, true)),
+      roll_back_(std::move(other.roll_back_))
+  {}
+
+  exception_guard(exception_guard const&) = delete;
+  exception_guard& operator=(exception_guard const&) = delete;
+  exception_guard& operator=(exception_guard &&) = delete;
+
+  void complete() noexcept {
+    complete_ = true;
+  }
+
+  ~exception_guard() {
+    if (!complete_) {
+      roll_back_();
+    }
+  }
+private:
+  bool complete_ {false};
+  Rollback roll_back_;
+};
+
+} // namespace evo

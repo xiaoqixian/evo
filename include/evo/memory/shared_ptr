@@ -7,8 +7,10 @@
 
 #include "evo/memory/compressed_pair"
 #include "evo/memory/unique_ptr"
+#include "evo/_utility/exception_guard"
 #include <atomic>
 #include <cstddef>
+#include <iterator>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -64,15 +66,42 @@ struct shared_ptr_default_delete<U[], Y>: default_delete<U[]> {};
 template <typename U, size_t N, typename Y>
 struct shared_ptr_default_delete<U[N], Y>: default_delete<U[]> {};
 
+template <typename BiIter>
+requires std::is_base_of_v<std::bidirectional_iterator_tag, typename std::iterator_traits<BiIter>::iterator_category>
+void destruct_at_multidimensional(BiIter first, BiIter last) {
+  if (first == last) return;
+
+  using V = typename std::iterator_traits<BiIter>::value_type;
+  if constexpr (std::is_array_v<V>) {
+    do {
+      --last;
+      decltype(auto) array = *last;
+      destruct_at_multidimensional(array, array + std::extent_v<V>);
+    } while (last != first);
+  } else {
+    do {
+      --last;
+      last->~V();
+    } while (last != first);
+  }
+}
+
 template <typename T>
 void construct_at_multidimensional(T* loc) {
   if constexpr (std::is_array_v<T>) {
     constexpr auto N = std::extent_v<T>;
     T& array = *loc;
+
+    size_t i = 0;
+
+    auto guard = exception_guard([&]() {
+      destruct_at_multidimensional(array, array + i);
+    });
     
-    for (size_t i = 0; i < N; i++) {
+    for (; i < N; i++) {
       construct_at_multidimensional(std::addressof(array[i]));
     }
+    guard.complete();
   } else {
     new (loc) T();
   }
@@ -84,10 +113,17 @@ void construct_at_multidimensional(T* loc, Arg const& arg) {
     static_assert(std::is_array_v<Arg>, "Array type cannot be initialized with a non-array type argument");
     constexpr auto N = std::extent_v<T>;
     T& array = *loc;
+
+    size_t i = 0;
+
+    auto guard = exception_guard([&]() {
+      destruct_at_multidimensional(array, array + i);
+    });
     
-    for (size_t i = 0; i < N; i++) {
+    for (; i < N; i++) {
       construct_at_multidimensional(std::addressof(array[i]), arg[i]);
     }
+    guard.complete();
   } else {
     new (loc) T(arg);
   }
@@ -97,10 +133,16 @@ template <typename T>
 void construct_at_n_multidimensional(T* loc, size_t n) {
   if constexpr (std::is_array_v<T>) {
     T& array = *loc;
-    
-    for (size_t i = 0; i < n; i++) {
+    size_t i = 0;
+
+    auto guard = exception_guard([&]() {
+      destruct_at_multidimensional(array, array + i);
+    });
+
+    for (; i < n; i++) {
       construct_at_multidimensional(std::addressof(array[i]));
     }
+    guard.complete();
   } else {
     new (loc) T();
   }
@@ -110,39 +152,18 @@ void construct_at_n_multidimensional(T* loc, size_t n, Arg const& arg) {
   if constexpr (std::is_array_v<T>) {
     static_assert(std::is_array_v<Arg>, "Array type cannot be initialized with a non-array type argument");
     T& array = *loc;
+
+    size_t i = 0;
+    auto guard = exception_guard([&]() {
+      destruct_at_multidimensional(array, array + i);
+    });
     
-    for (size_t i = 0; i < n; i++) {
+    for (; i < n; i++) {
       construct_at_multidimensional(std::addressof(array[i]), arg[i]);
     }
+    guard.complete();
   } else {
     new (loc) T(arg);
-  }
-}
-
-template <typename T>
-void destruct_at_multidimensional(T* loc) {
-  if constexpr (std::is_array_v<T>) {
-    constexpr auto N = std::extent_v<T>;
-    T& array = *loc;
-    
-    for (size_t i = N; i > 0; i--) {
-      destruct_at_multidimensional(std::addressof(array[i-1]));
-    }
-  } else {
-    loc->~T();
-  }
-}
-
-template <typename T>
-void destruct_at_n_multidimensional(T* loc, size_t n) {
-  if constexpr (std::is_array_v<T>) {
-    T& array = *loc;
-    
-    for (size_t i = 0; i < n; i++) {
-      destruct_at_multidimensional(std::addressof(array[i]));
-    }
-  } else {
-    loc->~T();
   }
 }
 
@@ -330,9 +351,15 @@ unbound_array_ctrl_block<T[]>::unbound_array_ctrl_block(size_t count) noexcept(s
   : count_(count)
 {
   T* array = get_data();
-  for (size_t i = 0; i < count_; i++) {
+
+  size_t i = 0;
+  auto guard = exception_guard([&]() {
+    destruct_at_multidimensional(array, array + i);
+  });
+  for (; i < count_; i++) {
     construct_at_multidimensional(std::addressof(array[i]));
   }
+  guard.complete();
 }
 
 template <typename T>
@@ -340,17 +367,20 @@ unbound_array_ctrl_block<T[]>::unbound_array_ctrl_block(size_t count, T const& u
   : count_(count)
 {
   T* array = get_data();
-  for (size_t i = 0; i < count_; i++) {
+  size_t i = 0;
+  auto guard = exception_guard([&]() {
+    destruct_at_multidimensional(array, array + i);
+  });
+  for (; i < count_; i++) {
     construct_at_multidimensional(std::addressof(array[i]), u);
   }
+  guard.complete();
 }
 
 template <typename T>
 void unbound_array_ctrl_block<T[]>::on_zero_shared() noexcept(std::is_nothrow_destructible_v<base_elem_t<T>>) {
   T* array = get_data();
-  for (size_t i = count_; i > 0; i--) {
-    destruct_at_multidimensional(std::addressof(array[i-1]));
-  }
+  destruct_at_multidimensional(array, array + count_);
 }
 
 template <typename T>
@@ -365,7 +395,8 @@ bounded_array_ctrl_block<T[N]>::bounded_array_ctrl_block(T const& u) noexcept(st
 
 template <typename T, size_t N>
 void bounded_array_ctrl_block<T[N]>::on_zero_shared() noexcept(std::is_nothrow_destructible_v<T>) {
-  destruct_at_multidimensional(get_data());
+  T* array = get_data();
+  destruct_at_multidimensional(array, array + N);
 }
 
 template <typename T, size_t N>
