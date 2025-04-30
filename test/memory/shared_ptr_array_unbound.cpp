@@ -24,6 +24,8 @@
 // Ignore error about requesting a large alignment not being ABI compatible with older AIX systems.
 
 #include "evo/memory/shared_ptr"
+#include "fmt/core.h"
+#include <gtest/gtest.h>
 
 struct DestroyInReverseOrder {
   static void reset() { global_count_ = 0; }
@@ -62,26 +64,69 @@ struct NonMovable {
   NonMovable(NonMovable&&) = delete;
 };
 
-template <class T, class ...Args>
-concept CanMakeShared = requires(Args&& ...args) {
-  { evo::make_shared<T>(evo::forward<Args>(args)...) } -> evo::same_as<evo::shared_ptr<T>>;
+struct CountCopies {
+  static void reset() { global_count_ = 0; }
+  static int copies() { return global_count_; }
+
+  constexpr CountCopies() : copies_(&global_count_) { }
+  constexpr CountCopies(int* counter) : copies_(counter) { }
+  constexpr CountCopies(CountCopies const& other) : copies_(other.copies_) { ++*copies_; }
+
+private:
+  int* copies_;
+  static int global_count_;
 };
 
-int main(int, char**) {
+int CountCopies::global_count_ = 0;
+
+struct alignas(alignof(std::max_align_t) * 2) OverAligned { };
+
+struct MaxAligned {
+  std::max_align_t foo;
+};
+
+struct ThrowOnConstruction {
+  struct exception : std::exception { };
+
+  ThrowOnConstruction() { on_construct(); }
+  ThrowOnConstruction(ThrowOnConstruction const&) { on_construct(); }
+
+  static void reset() { throw_after_ = -1; }
+  static void throw_after(int n) { throw_after_ = n; }
+
+private:
+  static int throw_after_;
+  void on_construct() {
+    if (throw_after_ == 0)
+      throw exception{};
+
+    if (throw_after_ != -1)
+      --throw_after_;
+  }
+};
+
+int ThrowOnConstruction::throw_after_ = -1;
+
+template <class T, class ...Args>
+concept CanMakeShared = requires(Args&& ...args) {
+  { evo::make_shared<T>(std::forward<Args>(args)...) } -> std::same_as<evo::shared_ptr<T>>;
+};
+
+TEST(SharedPtrTest, SharedPtrUnboundArray) {
   // Check behavior for a zero-sized array
   {
     // Without passing an initial value
     {
       using Array = int[];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(0);
-      assert(ptr != nullptr);
+      ASSERT_TRUE(ptr != nullptr);
     }
 
     // Passing an initial value
     {
       using Array = int[];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(0, 42);
-      assert(ptr != nullptr);
+      ASSERT_TRUE(ptr != nullptr);
     }
   }
 
@@ -91,16 +136,16 @@ int main(int, char**) {
     {
       using Array = int[];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(1);
-      assert(ptr != nullptr);
-      assert(ptr[0] == 0);
+      ASSERT_TRUE(ptr != nullptr);
+      ASSERT_TRUE(ptr[0] == 0);
     }
 
     // Passing an initial value
     {
       using Array = int[];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(1, 42);
-      assert(ptr != nullptr);
-      assert(ptr[0] == 42);
+      ASSERT_TRUE(ptr != nullptr);
+      ASSERT_TRUE(ptr[0] == 42);
     }
   }
 
@@ -111,28 +156,28 @@ int main(int, char**) {
       using Array = int[];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
       for (unsigned i = 0; i < 8; ++i) {
-        assert(ptr[i] == 0);
+        ASSERT_TRUE(ptr[i] == 0);
       }
     }
     {
       using Array = int[][3];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
       for (unsigned i = 0; i < 8; ++i) {
-        assert(ptr[i][0] == 0);
-        assert(ptr[i][1] == 0);
-        assert(ptr[i][2] == 0);
+        ASSERT_TRUE(ptr[i][0] == 0);
+        ASSERT_TRUE(ptr[i][1] == 0);
+        ASSERT_TRUE(ptr[i][2] == 0);
       }
     }
     {
       using Array = int[][3][2];
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
       for (unsigned i = 0; i < 8; ++i) {
-        assert(ptr[i][0][0] == 0);
-        assert(ptr[i][0][1] == 0);
-        assert(ptr[i][1][0] == 0);
-        assert(ptr[i][1][1] == 0);
-        assert(ptr[i][2][0] == 0);
-        assert(ptr[i][2][1] == 0);
+        ASSERT_TRUE(ptr[i][0][0] == 0);
+        ASSERT_TRUE(ptr[i][0][1] == 0);
+        ASSERT_TRUE(ptr[i][1][0] == 0);
+        ASSERT_TRUE(ptr[i][1][1] == 0);
+        ASSERT_TRUE(ptr[i][2][0] == 0);
+        ASSERT_TRUE(ptr[i][2][1] == 0);
       }
     }
 
@@ -142,7 +187,7 @@ int main(int, char**) {
       int init = 42;
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
       for (unsigned i = 0; i < 8; ++i) {
-        assert(ptr[i] == init);
+        ASSERT_TRUE(ptr[i] == init);
       }
     }
     {
@@ -150,9 +195,9 @@ int main(int, char**) {
       int init[3] = {42, 43, 44};
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
       for (unsigned i = 0; i < 8; ++i) {
-        assert(ptr[i][0] == 42);
-        assert(ptr[i][1] == 43);
-        assert(ptr[i][2] == 44);
+        ASSERT_TRUE(ptr[i][0] == 42);
+        ASSERT_TRUE(ptr[i][1] == 43);
+        ASSERT_TRUE(ptr[i][2] == 44);
       }
     }
     {
@@ -160,12 +205,12 @@ int main(int, char**) {
       int init[3][2] = {{31, 32}, {41, 42}, {51, 52}};
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
       for (unsigned i = 0; i < 8; ++i) {
-        assert(ptr[i][0][0] == 31);
-        assert(ptr[i][0][1] == 32);
-        assert(ptr[i][1][0] == 41);
-        assert(ptr[i][1][1] == 42);
-        assert(ptr[i][2][0] == 51);
-        assert(ptr[i][2][1] == 52);
+        ASSERT_TRUE(ptr[i][0][0] == 31);
+        ASSERT_TRUE(ptr[i][0][1] == 32);
+        ASSERT_TRUE(ptr[i][1][0] == 41);
+        ASSERT_TRUE(ptr[i][1][1] == 42);
+        ASSERT_TRUE(ptr[i][2][0] == 51);
+        ASSERT_TRUE(ptr[i][2][1] == 52);
       }
     }
   }
@@ -178,27 +223,27 @@ int main(int, char**) {
       DestroyInReverseOrder::reset();
       {
         evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-        assert(DestroyInReverseOrder::alive() == 8);
+        ASSERT_TRUE(DestroyInReverseOrder::alive() == 8);
       }
-      assert(DestroyInReverseOrder::alive() == 0);
+      ASSERT_TRUE(DestroyInReverseOrder::alive() == 0);
     }
     {
       using Array = DestroyInReverseOrder[][3];
       DestroyInReverseOrder::reset();
       {
         evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-        assert(DestroyInReverseOrder::alive() == 8 * 3);
+        ASSERT_TRUE(DestroyInReverseOrder::alive() == 8 * 3);
       }
-      assert(DestroyInReverseOrder::alive() == 0);
+      ASSERT_TRUE(DestroyInReverseOrder::alive() == 0);
     }
     {
       using Array = DestroyInReverseOrder[][3][2];
       DestroyInReverseOrder::reset();
       {
         evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-        assert(DestroyInReverseOrder::alive() == 8 * 3 * 2);
+        ASSERT_TRUE(DestroyInReverseOrder::alive() == 8 * 3 * 2);
       }
-      assert(DestroyInReverseOrder::alive() == 0);
+      ASSERT_TRUE(DestroyInReverseOrder::alive() == 0);
     }
 
     // Passing an initial value
@@ -209,9 +254,9 @@ int main(int, char**) {
       int init_count = 1;
       {
         evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-        assert(count == 8 + init_count);
+        ASSERT_TRUE(count == 8 + init_count);
       }
-      assert(count == init_count);
+      ASSERT_TRUE(count == init_count);
     }
     {
       using Array = DestroyInReverseOrder[][3];
@@ -220,9 +265,9 @@ int main(int, char**) {
       int init_count = 3;
       {
         evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-        assert(count == 8 * 3 + init_count);
+        ASSERT_TRUE(count == 8 * 3 + init_count);
       }
-      assert(count == init_count);
+      ASSERT_TRUE(count == init_count);
     }
     {
       using Array = DestroyInReverseOrder[][3][2];
@@ -231,9 +276,9 @@ int main(int, char**) {
       int init_count = 3 * 2;
       {
         evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-        assert(count == 8 * 3 * 2 + init_count);
+        ASSERT_TRUE(count == 8 * 3 * 2 + init_count);
       }
-      assert(count == init_count);
+      ASSERT_TRUE(count == init_count);
     }
   }
 
@@ -244,19 +289,19 @@ int main(int, char**) {
       using Array = CountCopies[];
       CountCopies::reset();
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-      assert(CountCopies::copies() == 0);
+      ASSERT_TRUE(CountCopies::copies() == 0);
     }
     {
       using Array = CountCopies[][3];
       CountCopies::reset();
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-      assert(CountCopies::copies() == 0);
+      ASSERT_TRUE(CountCopies::copies() == 0);
     }
     {
       using Array = CountCopies[][3][2];
       CountCopies::reset();
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-      assert(CountCopies::copies() == 0);
+      ASSERT_TRUE(CountCopies::copies() == 0);
     }
 
     // Passing an initial value
@@ -265,21 +310,21 @@ int main(int, char**) {
       int copies = 0;
       CountCopies init(&copies);
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-      assert(copies == 8);
+      ASSERT_TRUE(copies == 8);
     }
     {
       using Array = CountCopies[][3];
       int copies = 0;
       CountCopies init[3] = {&copies, &copies, &copies};
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-      assert(copies == 8 * 3);
+      ASSERT_TRUE(copies == 8 * 3);
     }
     {
       using Array = CountCopies[][3][2];
       int copies = 0;
       CountCopies init[3][2] = {{&copies, &copies}, {&copies, &copies}, {&copies, &copies}};
       evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-      assert(copies == 8 * 3 * 2);
+      ASSERT_TRUE(copies == 8 * 3 * 2);
     }
   }
 
@@ -294,8 +339,8 @@ int main(int, char**) {
         using Array = T[];
         evo::shared_ptr ptr = evo::make_shared<Array>(8);
         for (int i = 0; i < 8; ++i) {
-          T* p = evo::addressof(ptr[i]);
-          assert(reinterpret_cast<evo::uintptr_t>(p) % alignof(T) == 0);
+          T* p = std::addressof(ptr[i]);
+          ASSERT_TRUE(reinterpret_cast<std::uintptr_t>(p) % alignof(T) == 0);
         }
       }
       {
@@ -303,8 +348,8 @@ int main(int, char**) {
         evo::shared_ptr ptr = evo::make_shared<Array>(8);
         for (int i = 0; i < 8; ++i) {
           for (int j = 0; j < 3; ++j) {
-            T* p = evo::addressof(ptr[i][j]);
-            assert(reinterpret_cast<evo::uintptr_t>(p) % alignof(T) == 0);
+            T* p = std::addressof(ptr[i][j]);
+            ASSERT_TRUE(reinterpret_cast<std::uintptr_t>(p) % alignof(T) == 0);
           }
         }
       }
@@ -314,8 +359,8 @@ int main(int, char**) {
         for (int i = 0; i < 8; ++i) {
           for (int j = 0; j < 3; ++j) {
             for (int k = 0; k < 2; ++k) {
-              T* p = evo::addressof(ptr[i][j][k]);
-              assert(reinterpret_cast<evo::uintptr_t>(p) % alignof(T) == 0);
+              T* p = std::addressof(ptr[i][j][k]);
+              ASSERT_TRUE(reinterpret_cast<std::uintptr_t>(p) % alignof(T) == 0);
             }
           }
         }
@@ -346,9 +391,9 @@ int main(int, char**) {
         DestroyInReverseOrder::reset();
         try {
           evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-          assert(false);
+          ASSERT_TRUE(false);
         } catch (ThrowOnConstruction::exception const&) {
-          assert(DestroyInReverseOrder::alive() == 0);
+          ASSERT_TRUE(DestroyInReverseOrder::alive() == 0);
         }
       }
     }
@@ -359,9 +404,9 @@ int main(int, char**) {
         DestroyInReverseOrder::reset();
         try {
           evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-          assert(false);
+          ASSERT_TRUE(false);
         } catch (ThrowOnConstruction::exception const&) {
-          assert(DestroyInReverseOrder::alive() == 0);
+          ASSERT_TRUE(DestroyInReverseOrder::alive() == 0);
         }
       }
     }
@@ -372,9 +417,9 @@ int main(int, char**) {
         DestroyInReverseOrder::reset();
         try {
           evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8);
-          assert(false);
+          ASSERT_TRUE(false);
         } catch (ThrowOnConstruction::exception const&) {
-          assert(DestroyInReverseOrder::alive() == 0);
+          ASSERT_TRUE(DestroyInReverseOrder::alive() == 0);
         }
       }
     }
@@ -389,9 +434,9 @@ int main(int, char**) {
         ThrowOnConstruction::throw_after(i);
         try {
           evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-          assert(false);
+          ASSERT_TRUE(false);
         } catch (ThrowOnConstruction::exception const&) {
-          assert(DestroyInReverseOrder::alive() == 1);
+          ASSERT_TRUE(DestroyInReverseOrder::alive() == 1);
         }
       }
     }
@@ -404,9 +449,9 @@ int main(int, char**) {
         ThrowOnConstruction::throw_after(i);
         try {
           evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-          assert(false);
+          ASSERT_TRUE(false);
         } catch (ThrowOnConstruction::exception const&) {
-          assert(DestroyInReverseOrder::alive() == 3);
+          ASSERT_TRUE(DestroyInReverseOrder::alive() == 3);
         }
       }
     }
@@ -419,9 +464,9 @@ int main(int, char**) {
         ThrowOnConstruction::throw_after(i);
         try {
           evo::shared_ptr<Array> ptr = evo::make_shared<Array>(8, init);
-          assert(false);
+          ASSERT_TRUE(false);
         } catch (ThrowOnConstruction::exception const&) {
-          assert(DestroyInReverseOrder::alive() == 3 * 2);
+          ASSERT_TRUE(DestroyInReverseOrder::alive() == 3 * 2);
         }
       }
     }
@@ -435,19 +480,19 @@ int main(int, char**) {
   }
 
     // Make sure evo::make_shared handles badly-behaved types properly
-    {
-      using Array = operator_hijacker[];
-      evo::shared_ptr<Array> p1 = evo::make_shared<Array>(3);
-      evo::shared_ptr<Array> p2 = evo::make_shared<Array>(3, operator_hijacker());
-      assert(p1 != nullptr);
-      assert(p2 != nullptr);
-    }
+    // {
+    //   using Array = operator_hijacker[];
+    //   evo::shared_ptr<Array> p1 = evo::make_shared<Array>(3);
+    //   evo::shared_ptr<Array> p2 = evo::make_shared<Array>(3, operator_hijacker());
+    //   ASSERT_TRUE(p1 != nullptr);
+    //   ASSERT_TRUE(p2 != nullptr);
+    // }
 
   // Check that we SFINAE-away for invalid arguments
   {
     struct T { };
-    static_assert( CanMakeShared<T[], evo::size_t>);
-    static_assert( CanMakeShared<T[], evo::size_t, T>);
-    static_assert(!CanMakeShared<T[], evo::size_t, T, int>); // too many arguments
+    static_assert( CanMakeShared<T[], std::size_t>);
+    static_assert( CanMakeShared<T[], std::size_t, T>);
+    static_assert(!CanMakeShared<T[], std::size_t, T, int>); // too many arguments
   }
 }

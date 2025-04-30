@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <new>
 #include <type_traits>
 #include <utility>
 #include <cassert>
@@ -20,6 +21,24 @@ template <typename T>
 class shared_ptr;
 
 namespace {
+
+template<typename T>
+struct base_element_type {
+  using type = T;
+};
+
+template<typename T, std::size_t N>
+struct base_element_type<T[N]> {
+  using type = typename base_element_type<T>::type;
+};
+
+template<typename T>
+struct base_element_type<T[]> {
+  using type = typename base_element_type<T>::type;
+};
+
+template <typename T>
+using base_elem_t = base_element_type<T>::type;
 
 template <typename Y, typename T>
 struct bound_convertible_to_unbound: std::false_type {};
@@ -44,6 +63,88 @@ struct shared_ptr_default_delete<U[], Y>: default_delete<U[]> {};
 
 template <typename U, size_t N, typename Y>
 struct shared_ptr_default_delete<U[N], Y>: default_delete<U[]> {};
+
+template <typename T>
+void construct_at_multidimensional(T* loc) {
+  if constexpr (std::is_array_v<T>) {
+    constexpr auto N = std::extent_v<T>;
+    T& array = *loc;
+    
+    for (size_t i = 0; i < N; i++) {
+      construct_at_multidimensional(std::addressof(array[i]));
+    }
+  } else {
+    new (loc) T();
+  }
+}
+
+template <typename T, typename Arg>
+void construct_at_multidimensional(T* loc, Arg const& arg) {
+  if constexpr (std::is_array_v<T>) {
+    static_assert(std::is_array_v<Arg>, "Array type cannot be initialized with a non-array type argument");
+    constexpr auto N = std::extent_v<T>;
+    T& array = *loc;
+    
+    for (size_t i = 0; i < N; i++) {
+      construct_at_multidimensional(std::addressof(array[i]), arg[i]);
+    }
+  } else {
+    new (loc) T(arg);
+  }
+}
+
+template <typename T>
+void construct_at_n_multidimensional(T* loc, size_t n) {
+  if constexpr (std::is_array_v<T>) {
+    T& array = *loc;
+    
+    for (size_t i = 0; i < n; i++) {
+      construct_at_multidimensional(std::addressof(array[i]));
+    }
+  } else {
+    new (loc) T();
+  }
+}
+template <typename T, typename Arg>
+void construct_at_n_multidimensional(T* loc, size_t n, Arg const& arg) {
+  if constexpr (std::is_array_v<T>) {
+    static_assert(std::is_array_v<Arg>, "Array type cannot be initialized with a non-array type argument");
+    T& array = *loc;
+    
+    for (size_t i = 0; i < n; i++) {
+      construct_at_multidimensional(std::addressof(array[i]), arg[i]);
+    }
+  } else {
+    new (loc) T(arg);
+  }
+}
+
+template <typename T>
+void destruct_at_multidimensional(T* loc) {
+  if constexpr (std::is_array_v<T>) {
+    constexpr auto N = std::extent_v<T>;
+    T& array = *loc;
+    
+    for (size_t i = N; i > 0; i--) {
+      destruct_at_multidimensional(std::addressof(array[i-1]));
+    }
+  } else {
+    loc->~T();
+  }
+}
+
+template <typename T>
+void destruct_at_n_multidimensional(T* loc, size_t n) {
+  if constexpr (std::is_array_v<T>) {
+    T& array = *loc;
+    
+    for (size_t i = 0; i < n; i++) {
+      destruct_at_multidimensional(std::addressof(array[i]));
+    }
+  } else {
+    loc->~T();
+  }
+}
 
 class shared_count {
 protected:
@@ -156,24 +257,47 @@ public:
 };
 
 template <typename T>
-struct array_ctrl_block;
+struct unbound_array_ctrl_block;
 
 template <typename T>
-requires std::is_default_constructible_v<T>
-struct array_ctrl_block<T[]>: shared_weak_count {
-  array_ctrl_block(size_t);
+struct bounded_array_ctrl_block;
 
-  virtual void on_zero_shared() noexcept;
-  virtual void on_zero_shared_weak() noexcept;
+template <typename T>
+struct unbound_array_ctrl_block<T[]>: shared_weak_count {
+  unbound_array_ctrl_block(size_t) noexcept(std::is_nothrow_constructible_v<T>);
+
+  unbound_array_ctrl_block(size_t, T const&) noexcept(std::is_nothrow_copy_constructible_v<T>);
+
+  constexpr T* get_data() noexcept { return reinterpret_cast<T*>(data_); }
+
+  static constexpr size_t bytes_for(size_t elements) {
+    size_t bytes = sizeof(unbound_array_ctrl_block) + 
+      (elements == 0 ? 0 : (elements - 1) * sizeof(T));
+    constexpr size_t align = alignof(T);
+    return (bytes + align - 1) & ~(align - 1);
+  }
+
+  virtual void on_zero_shared() noexcept(std::is_nothrow_destructible_v<base_elem_t<T>>) override;
+  virtual void on_zero_shared_weak() noexcept override;
+
+  ~unbound_array_ctrl_block() override {}
 private:
   size_t count_;
-  T data_[1];
+  // put data_[1] inside an union to avoid automatic destruction
+  union {
+    T data_[1];
+  };
 };
 
 template <typename T, size_t N>
-requires std::is_default_constructible_v<T>
-struct array_ctrl_block<T[N]> {
-  array_ctrl_block();
+struct bounded_array_ctrl_block<T[N]>: shared_weak_count {
+  bounded_array_ctrl_block() noexcept(std::is_nothrow_constructible_v<T>) = default;
+  bounded_array_ctrl_block(T const&) noexcept(std::is_nothrow_copy_constructible_v<T>);
+
+  constexpr T* get_data() noexcept { return data_; }
+
+  virtual void on_zero_shared() noexcept(std::is_nothrow_destructible_v<T>) override;
+  virtual void on_zero_shared_weak() noexcept override;
 private:
   T data_[N];
 };
@@ -201,6 +325,54 @@ void shared_ptr_emplace<T>::on_zero_shared_weak() noexcept {
   ::operator delete(this);
 }
 
+template <typename T>
+unbound_array_ctrl_block<T[]>::unbound_array_ctrl_block(size_t count) noexcept(std::is_nothrow_constructible_v<T>)
+  : count_(count)
+{
+  T* array = get_data();
+  for (size_t i = 0; i < count_; i++) {
+    construct_at_multidimensional(std::addressof(array[i]));
+  }
+}
+
+template <typename T>
+unbound_array_ctrl_block<T[]>::unbound_array_ctrl_block(size_t count, T const& u) noexcept(std::is_nothrow_copy_constructible_v<T>)
+  : count_(count)
+{
+  T* array = get_data();
+  for (size_t i = 0; i < count_; i++) {
+    construct_at_multidimensional(std::addressof(array[i]), u);
+  }
+}
+
+template <typename T>
+void unbound_array_ctrl_block<T[]>::on_zero_shared() noexcept(std::is_nothrow_destructible_v<base_elem_t<T>>) {
+  T* array = get_data();
+  for (size_t i = count_; i > 0; i--) {
+    destruct_at_multidimensional(std::addressof(array[i-1]));
+  }
+}
+
+template <typename T>
+void unbound_array_ctrl_block<T[]>::on_zero_shared_weak() noexcept {
+  ::operator delete(this, std::align_val_t(alignof(unbound_array_ctrl_block<T[]>)));
+}
+
+template <typename T, size_t N>
+bounded_array_ctrl_block<T[N]>::bounded_array_ctrl_block(T const& u) noexcept(std::is_nothrow_copy_constructible_v<T>) {
+  construct_at_multidimensional(get_data(), u);
+}
+
+template <typename T, size_t N>
+void bounded_array_ctrl_block<T[N]>::on_zero_shared() noexcept(std::is_nothrow_destructible_v<T>) {
+  destruct_at_multidimensional(get_data());
+}
+
+template <typename T, size_t N>
+void bounded_array_ctrl_block<T[N]>::on_zero_shared_weak() noexcept {
+  ::operator delete(this);
+}
+
 } // end of anonymouse namespace
 
 template <typename T>
@@ -220,10 +392,8 @@ class shared_ptr {
   using reference = element_type&;
   using const_reference = element_type const&;
 
-  using ctrl_block = shared_weak_count;
-
   pointer ptr_ {nullptr};
-  ctrl_block* ctrl_ {nullptr};
+  shared_weak_count* ctrl_ {nullptr};
 public:
   constexpr shared_ptr() noexcept = default;
   constexpr shared_ptr(std::nullptr_t) noexcept;
@@ -625,11 +795,54 @@ shared_ptr<T> make_shared(Args&&... args) {
   return shared_ptr<T>::template __create_with_control_block<T, shared_ptr_emplace<T>>(ctrl->get_elem(), ctrl);
 }
 
-template <typename T, typename... Args>
-requires (std::is_array_v<T> && std::is_convertible_v<T, Args...>)
-shared_ptr<T> make_shared(Args&&... args) {
-  array_ctrl_block<T>* ctrl = new array_ctrl_block<T>(std::forward<Args>(args)...);
-  return shared_ptr<T>::template __create_with_control_block<T, shared_ptr_emplace<T>>(ctrl->get_elem(), ctrl);
+/**
+ * make_shared<T[N]>()
+ */
+template <typename T>
+requires (std::is_bounded_array_v<T> && std::is_default_constructible_v<std::remove_extent_t<T>>)
+shared_ptr<T> make_shared() {
+  using CtrlBlk = bounded_array_ctrl_block<T>;
+  using Y = std::remove_extent_t<T>;
+  CtrlBlk* ctrl = new CtrlBlk();
+  return shared_ptr<T>::template __create_with_control_block<Y, CtrlBlk>(ctrl->get_data(), ctrl);
+}
+
+/**
+ * make_shared<T[N]>(T const& u)
+ */
+template <typename T>
+requires (std::is_bounded_array_v<T> && std::is_copy_constructible_v<base_elem_t<T>>)
+shared_ptr<T> make_shared(std::remove_extent_t<T> const& u) {
+  using CtrlBlk = bounded_array_ctrl_block<T>;
+  using Y = std::remove_extent_t<T>;
+  CtrlBlk* ctrl = new CtrlBlk(u);
+  return shared_ptr<T>::template __create_with_control_block<Y, CtrlBlk>(ctrl->get_data(), ctrl);
+}
+
+/**
+ * make_shared<T[]>(size_t n)
+ */
+template <typename T>
+requires (std::is_unbounded_array_v<T> && std::is_default_constructible_v<std::remove_extent_t<T>>)
+shared_ptr<T> make_shared(size_t n) {
+  using CtrlBlk = unbound_array_ctrl_block<T>;
+  using Y = std::remove_extent_t<T>;
+  void* tmp = ::operator new(CtrlBlk::bytes_for(n), std::align_val_t(alignof(CtrlBlk)));
+  CtrlBlk* ctrl = new (tmp) CtrlBlk(n);
+  return shared_ptr<T>::template __create_with_control_block<Y, CtrlBlk>(ctrl->get_data(), ctrl);
+}
+
+/**
+ * make_shared<T[]>(size_t N, T const& u)
+ */
+template <typename T>
+requires (std::is_unbounded_array_v<T> && std::is_copy_constructible_v<base_elem_t<T>>)
+shared_ptr<T> make_shared(size_t n, std::remove_extent_t<T> const& u) {
+  using CtrlBlk = unbound_array_ctrl_block<T>;
+  using Y = std::remove_extent_t<T>;
+  void* tmp = ::operator new(CtrlBlk::bytes_for(n), std::align_val_t(alignof(CtrlBlk)));
+  CtrlBlk* ctrl = new (tmp) CtrlBlk(n, u);
+  return shared_ptr<T>::template __create_with_control_block<Y, CtrlBlk>(ctrl->get_data(), ctrl);
 }
 
 template <typename T>
