@@ -3,15 +3,101 @@
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
+#include "evo/memory/compressed_pair"
 #include <functional>
+#include <iterator>
+#include <memory>
+#include <utility>
+
 namespace evo {
+
+namespace {
+
+template <typename Iter, typename K, typename V>
+concept GoodIter = std::convertible_to<
+    typename std::iterator_traits<Iter>::value_type,
+    std::pair<const K, V>
+>;
+
+template <typename T>
+struct hash_map_node {
+  using value_type = std::remove_cv_t<T>;
+  value_type value_;
+  hash_map_node<T>* next_ {nullptr};
+
+  template <typename U>
+  hash_map_node(U&& value): value_(std::forward<U>(value)) {}
+};
+
+}
+
+template <typename>
+class hash_map_iterator;
 
 template <
   typename K,
   typename V,
   typename Hash = std::hash<K>,
-  typename KeyEqual = std::equal_to<K>
+  typename KeyEqual = std::equal_to<K>,
+  typename Allocator = std::allocator<std::pair<const K, V>>
 >
-class unordered_map {};
+class unordered_map {
+public:
+  using iterator = hash_map_iterator<void>;
+public:
+  template <GoodIter<K, V> Iter>
+  unordered_map(Iter first, Iter last);
+
+  template <typename... Args>
+  std::pair<iterator, bool> emplace(Args&&... args);
+
+  void reserve(size_t n);
+
+private:
+  constexpr Hash get_hash() const noexcept {
+    return meta_.first();
+  }
+
+  constexpr KeyEqual get_key_equal() const noexcept {
+    return meta_.second().first();
+  }
+
+  constexpr Allocator get_alloc() const noexcept {
+    return meta_.second().second();
+  }
+
+private:
+  using P = std::pair<const K, V>;
+  using node = hash_map_node<P>;
+
+  compressed_pair<Hash, compressed_pair<KeyEqual, Allocator>> meta_;
+
+  size_t size_ {0};
+  size_t cap_ {0};
+  size_t bucket_count_ {0};
+  std::unique_ptr<node*[]> buckets_ {nullptr};
+};
+
+template <typename K, typename V, typename Hash, typename KeyEqual, typename Allocator>
+template <GoodIter<K, V> Iter>
+unordered_map<K, V, Hash, KeyEqual, Allocator>::unordered_map(Iter first, Iter last) {
+  if (first == last) return;
+
+  reserve(std::distance(first, last));
+
+  do {
+    --last;
+    auto const hash_key = get_hash()(last->first);
+    auto const bucket_idx = hash_key & (bucket_count_ - 1);
+    
+    node* new_node = new node(*last);
+    new_node->next_ = std::exchange(buckets_[bucket_idx], new_node);
+  } while (last != first);
+}
+
+template <typename K, typename V, typename Hash, typename KeyEqual, typename Allocator>
+void unordered_map<K, V, Hash, KeyEqual, Allocator>::reserve(size_t n) {
+  
+}
 
 } // namespace evo

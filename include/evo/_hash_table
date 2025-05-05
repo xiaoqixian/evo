@@ -1,0 +1,13 @@
+// -*- C++ -*-
+// Date:   Fri May 02 17:18:46 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#include "evo/types"
+namespace evo {
+
+inline usize constrain_hash(usize h, usize bc) {
+  return !(bc & (bc-1)) ? (h & (bc - 1)) : (h < bc ? h : h % bc);
+}
+
+} // namespace evo
