@@ -1,0 +1,26 @@
+// -*- C++ -*-
+// Date:   Sun May 04 12:42:59 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include "evo/types"
+#include "evo/macros"
+#include <chrono>
+#include <memory>
+#include <ratio>
+#include <unordered_map>
+#include <coroutine>
+
+namespace evo::coro {
+
+class Driver {
+public:
+  template <typename O>
+  bool check_ready(O& op, std::coroutine_handle<> h);
+};
+
+extern thread_local std::unique_ptr<Driver> GLOBAL_DRIVER;
+
+} // namespace evo::coro

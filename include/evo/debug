@@ -41,6 +41,6 @@
 
 #define CHECK_DEBUG(A, M, ...) if (!(A)) { DEBUG(M, ##__VA_ARGS__);}
 
-#define ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
+#define DEBUG_ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
 
 #endif

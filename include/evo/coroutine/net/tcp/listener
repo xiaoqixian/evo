@@ -1,0 +1,39 @@
+// -*- C++ -*-
+// Date:   Sat May 03 22:32:59 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include <cerrno>
+#include <cstring>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <fmt/format.h>
+#include <utility>
+#include "evo/coroutine/task"
+#include "evo/coroutine/utilities"
+#include "evo/coroutine/net/tcp/stream"
+
+namespace evo::coro::net {
+
+class TcpListener {
+  Fd fd_;
+
+  static constexpr size_t BACKLOG = 128;
+public:
+  TcpListener(int fd) noexcept: fd_(fd) {}
+
+  TcpListener(TcpListener const&) = delete;
+  TcpListener(TcpListener && other) noexcept: fd_(std::move(other.fd_)) {}
+
+  TcpListener& operator=(TcpListener const&) = delete;
+  TcpListener& operator=(TcpListener &&) = delete;
+
+  static TcpListener bind(int port);
+
+  task<TcpStream> accept();
+};
+
+} // namespace evo::coro::net

@@ -1,0 +1,55 @@
+// -*- C++ -*-
+// Date:   Sat May 03 15:55:45 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#include "evo/coroutine/driver"
+#include "evo/coroutine/io_scheduler"
+#include "evo/debug"
+#include <cerrno>
+#include <concepts>
+#include <coroutine>
+#include <cstring>
+#include <tuple>
+
+namespace evo::coro {
+
+namespace __op_detail {
+
+template <typename Op>
+concept OpAble = requires (Op op) {
+  {op.interest()} -> std::same_as<std::tuple<int, IODirection>>;
+  {op.invoke()} -> std::same_as<int>;
+
+  typename Op::return_type;
+};
+
+} // namespace op_detail
+
+template <__op_detail::OpAble O>
+class OpAwaiter {
+  O op_;
+  Driver& driver_;
+  using Ret = O::return_type;
+  Ret ret_;
+
+public:
+  OpAwaiter(O op): op_(op) {
+    DEBUG_ASSERT(GLOBAL_DRIVER != nullptr, "");
+    driver_ = *GLOBAL_DRIVER;
+  }
+
+  bool await_ready() {
+    return false;
+  }
+
+  bool await_suspend(std::coroutine_handle<> h) {
+    return driver_.check_ready(op_, h);
+  }
+
+  Ret await_resume() noexcept {
+    return op_.invoke();
+  }
+};
+
+} // namespace evo::coro

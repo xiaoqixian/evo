@@ -9,7 +9,7 @@
 #include <utility>
 #include "evo/coroutine/promise_base"
 
-namespace evo {
+namespace evo::coro {
 
 template <typename Ret = void>
 class task;
@@ -20,7 +20,7 @@ template <typename Ret>
 struct task_promise;
 
 template <typename Ret>
-using task_promise_base = evo::promise_base<Ret>;
+using task_promise_base = promise_base<Ret>;
 
 template <typename Ret>
 struct task_promise: task_promise_base<Ret> {
@@ -67,8 +67,8 @@ struct task_promise: task_promise_base<Ret> {
 template <typename Ret>
 class task {
 public:
-  using promise_t = task_impl::task_promise<Ret>;
-  using handle_t  = std::coroutine_handle<promise_t>;
+  using promise_type = task_impl::task_promise<Ret>;
+  using handle_t  = std::coroutine_handle<promise_type>;
 
   constexpr task() noexcept: handle(nullptr) {}
   explicit constexpr task(handle_t h) noexcept: handle(h) {}
@@ -136,4 +136,4 @@ private:
   handle_t handle;
 };
 
-} // namespace evo
+} // namespace evo::coro

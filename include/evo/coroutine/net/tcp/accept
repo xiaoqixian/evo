@@ -1,0 +1,41 @@
+// -*- C++ -*-
+// Date:   Sat May 03 22:33:53 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include "evo/coroutine/driver"
+#include "evo/coroutine/op"
+#include "evo/coroutine/utilities"
+#include "evo/result"
+#include <cerrno>
+#include <cstring>
+#include <sys/socket.h>
+#include <coroutine>
+#include <tuple>
+
+namespace evo::coro {
+
+namespace net {
+
+class Accept {
+  Fd fd_;
+public:
+  using return_type = int;
+  auto interest() -> std::tuple<int, IODirection> {
+    return std::make_tuple(fd_, IODirection::read());
+  }
+
+  int invoke() {
+    return ::accept(fd_, nullptr, nullptr);
+  }
+};
+
+class OpAccept: public OpAwaiter<Accept, Driver> {
+  static OpAwaiter<Accept, Driver> accept(Fd const& fd);
+};
+
+} // namespace net
+
+} // namespace evo::coro::net

@@ -1,20 +1,22 @@
 // -*- C++ -*-
-/**********************************************
-  > File Name		: types.h
-  > Author		    : lunar
-  > Email			: lunar_ubuntu@qq.com
-  > Created Time	: Mon Apr 17 21:03:24 2023
-  > Location        : Shanghai
-  > Copyright@ https://github.com/xiaoqixian
- **********************************************/
-#ifndef _TYPES_H
-#define _TYPES_H
+// Date:   Sat May 03 16:55:06 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
 
 namespace evo {
 
-typedef unsigned long size_t;
-typedef size_t ptrdiff_t;
+using size_t    = unsigned long;
+using ptrdiff_t = size_t;
+using usize     = size_t;
+using u8        = unsigned char;
+using u16       = unsigned short;
+using u32       = unsigned int;
+using u64       = unsigned long;
+using i8        = char;
+using i16       = short;
+using i32       = int;
+using i64       = long;
 
 }
-
-#endif /* _TYPES_H*/

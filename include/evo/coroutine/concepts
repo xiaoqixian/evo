@@ -8,10 +8,14 @@
 
 #include "evo/concepts"
 #include <coroutine>
+#include <type_traits>
 
 namespace evo {
 
 namespace concepts {
+
+template <typename T, template <typename> class Trait>
+concept HasTrait = std::is_base_of_v<Trait<T>, T>;
 
 // add concepts for coroutine.
 template <typename A, typename P = void>

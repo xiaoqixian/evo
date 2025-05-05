@@ -3,8 +3,7 @@
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
-#ifndef _PROMISE_BASE_HPP
-#define _PROMISE_BASE_HPP
+#pragma once
 
 #include <coroutine>
 #include <exception>
@@ -13,7 +12,7 @@
 #include <variant>
 #include <stdexcept>
 
-namespace evo {
+namespace evo::coro {
 
 namespace promise_base_impl {
 
@@ -146,6 +145,4 @@ private:
   std::exception_ptr except_ptr;
 };
 
-} // namespace evo
-
-#endif // _PROMISE_BASE_HPP
+} // namespace evo::coro

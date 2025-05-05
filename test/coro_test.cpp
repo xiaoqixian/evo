@@ -4,10 +4,11 @@
 
 #include <coroutine>
 #include <exception>
+#include <future>
 #include <stdio.h>
 #include <fmt/format.h>
 
-template <int I>
+template <int I, typename T>
 struct task {
   struct promise_type;
   typedef std::coroutine_handle<promise_type> handle_t;
@@ -15,6 +16,8 @@ struct task {
   handle_t handle;
 
   struct promise_type {
+    T value_;
+
     auto get_return_object() {
       printf("coro%d get_return_object\n", I);
       return task {
@@ -32,8 +35,14 @@ struct task {
       return std::suspend_always();
     }
 
-    void return_void() {
-      printf("coro%d return_void\n", I);
+    void return_value(T const& value) {
+      printf("coro%d return_value const&\n", I);
+      value_ = value;
+    }
+
+    void return_value(T && value) {
+      printf("coro%d return_value &&\n", I);
+      value_ = std::move(value);
     }
 
     void unhandled_exception() {
@@ -46,33 +55,36 @@ struct task {
     return false;
   }
 
-  void await_suspend(std::coroutine_handle<>) noexcept {
+  bool await_suspend(std::coroutine_handle<>) noexcept {
     printf("coro%d await_suspend()\n", I);
+    return false;
   }
 
-  void await_resume() noexcept {
+  auto await_resume() noexcept {
     printf("coro%d await_resume()\n", I);
+    return 1;
   }
 };
 
-task<2> coro2() {
+task<2, int> coro2() {
   printf("coro2 started\n");
-  co_return;
+  co_return 2;
 }
 
-task<1> coro1() {
+task<1, int> coro1() {
   printf("coro1 started\n");
   auto c2 = coro2();
   printf("coro2 created\n");
-  co_await c2;
+  auto res = co_await c2;
   printf("coro1 resumed\n");
   co_await c2;
   printf("coro1 resumed again\n");
+  co_return 1;
 }
 
 int main() {
   auto c1 = coro1();
-  fmt::println("coroutine handle size {}", sizeof(c1.handle));
+
   while (!c1.handle.done()) {
     printf("======= coro1 suspended\n");
     c1.handle.resume();

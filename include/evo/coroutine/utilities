@@ -1,0 +1,82 @@
+// -*- C++ -*-
+// Date:   Sun May 04 11:09:54 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include <fcntl.h>
+#include <utility>
+#include "evo/coroutine/driver"
+#include "evo/coroutine/runtime"
+#include "evo/debug"
+#include "evo/macros"
+
+namespace evo::coro {
+
+class Fd {
+  int raw_fd_ {-1};
+  size_t* counter_ {nullptr};
+
+public:
+  explicit Fd(int fd): raw_fd_(fd), counter_(new size_t(1)) {
+    int res = ::fcntl(fd, F_SETFL, O_NONBLOCK);
+    if (res == -1) {
+      SYS_ERROR(fcntl);
+    }
+
+    DEBUG_ASSERT(fd >= 0, "");
+
+    UNIMPLEMENTED();
+    // CURRENT.with([fd](DriverInner* inner) {
+    //   switch (inner->type_) {
+    //     case DriverType::Empty:
+    //       FATAL("");
+    //       break;
+    //
+    //     case DriverType::Epoll:
+    //     {
+    //       reinterpret_cast<EpollDriver*>(inner->driver_)->register_fd(fd);
+    //       break;
+    //     }
+    //   }
+    // });
+  }
+
+  Fd(Fd const& other): raw_fd_(other.raw_fd_), counter_(other.counter_) {
+    if (counter_) (*counter_)++;
+  }
+  Fd(Fd && other)
+    : raw_fd_(std::exchange(other.raw_fd_, -1)),
+      counter_(std::exchange(other.counter_, nullptr))
+  {}
+
+  ~Fd() {
+    if (counter_ && --(*counter_) == 0) {
+      delete counter_;
+      DEBUG_ASSERT(raw_fd_ != -1, "");
+
+      UNIMPLEMENTED();
+
+      // CURRENT.with([this](DriverInner* inner) {
+      //   switch (inner->type_) {
+      //     case DriverType::Empty:
+      //       FATAL("");
+      //       break;
+      //
+      //     case DriverType::Epoll:
+      //     {
+      //       reinterpret_cast<EpollDriver*>(inner->driver_)->deregister_fd(this->raw_fd_);
+      //     }
+      //   }
+      // });
+      // ::close(raw_fd_);
+    }
+  }
+
+  operator int() const {
+    return raw_fd_;
+  }
+};
+
+} // namespace evo::coro

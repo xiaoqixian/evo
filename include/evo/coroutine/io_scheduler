@@ -1,148 +1,108 @@
 // -*- C++ -*-
-// Date:   Thu Mar 07 22:44:51 2024
+// Date:   Sat May 03 20:26:19 2025
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
-#ifndef _IO_SCHEDULER_H
-#define _IO_SCHEDULER_H
+#pragma once
 
-#include <chrono>
-#include <vector>
 #include <coroutine>
-#include <memory>
-
-#include "evo/coroutine/task"
-
-namespace evo {
-
-#ifdef __APPLE__
-
-#include <sys/event.h>
-enum class poll_op {
-  READ = EVFILT_READ,
-  WRITE = EVFILT_WRITE,
-  READ_WRITE = EVFILT_READ | EVFILT_WRITE
-};
-
-#else
+#include <functional>
 #include <sys/epoll.h>
-enum class poll_op {
-  READ = EPOLLIN,
-  WRITE = EPOLLOUT,
-  READ_WRITE = EPOLLIN | EPOLLOUT
-};
+#include "evo/types"
 
-#endif // __APPLE__
+namespace evo::coro {
 
-enum class poll_status {
-  // the poll operation was successful
-  EVENT,
+struct Ready {
+  static constexpr u8 EMPTY          = 0b000000;
+  static constexpr u8 READABLE       = 0b000001;
+  static constexpr u8 WRITABLE       = 0b000010;
+  static constexpr u8 READ_CLOSED    = 0b000100;
+  static constexpr u8 WRITE_CLOSED   = 0b001000;
+  static constexpr u8 READ_CANCELED  = 0b010000;
+  static constexpr u8 WRITE_CANCELED = 0b100000;
 
-  // the poll operation timeout
-  TIMEOUT,
+  static constexpr u8 READ_ALL = READABLE | READ_CANCELED | READ_CLOSED;
+  static constexpr u8 WRITE_ALL = WRITABLE | WRITE_CANCELED | WRITE_CLOSED;
 
-  // the poll operation failed
-  ERROR,
+  Ready(u8 val): value_(val) {}
 
-  // the file descriptor is closed
-  CLOSED
-};
-
-struct poll_info {
-  int fd;
-  std::coroutine_handle<> handle;
-  poll_status status;
-
-  poll_info(int fd): fd(fd), handle(nullptr) {}
-
-  struct poll_awaiter {
-    poll_info& pi;
-
-    explicit poll_awaiter(poll_info& pi): pi(pi) {}
-
-    inline bool await_ready() const noexcept {
-      return false;
+  static Ready from_epoll_events(u32 events) {
+    u8 value = EMPTY;
+    if (events & EPOLLIN) {
+      value |= READABLE;
     }
-
-    void await_suspend(std::coroutine_handle<> h) noexcept {
-      this->pi.handle = h;
-      // TODO: why put atomic_thread_fence here.
-      // std::atomic_thread_fence(std::memory_order_release);
+    if (events & EPOLLOUT) {
+      value |= WRITABLE;
     }
-
-    poll_status await_resume() const noexcept {
-      return this->pi.status;
-    }
-  };
-
-  poll_awaiter operator co_await() noexcept {
-    return poll_awaiter(*this);
+    return Ready {value};
   }
-};
 
-enum class poll_resume_policy {
-  // resume on the current thread.
-  INLINE,
-
-  // resume in a thread pool
-  THREAD_POOL
-};
-
-class io_scheduler_base {
-public:
-#ifdef __APPLE__
-  typedef struct kevent poll_event;
-
-  int kq_fd;
-
-#else
-  typedef struct epoll_event poll_event;
+  void set(u8 val) {
+    value_ = val;
+  }
   
-  int epoll_fd;
-
-#endif
-
-  typedef std::chrono::milliseconds timeunit_t;
+  operator u8() const {
+    return value_;
+  }
   
-  static const constexpr timeunit_t DEFAULT_TIMEOUT { 1000 };
-  static const constexpr int MAX_EVENTS = 16;
+  bool is_empty() const {
+    return value_ == EMPTY;
+  }
 
-  std::array<poll_event, MAX_EVENTS> events {};
-  std::vector<std::coroutine_handle<>> handles_to_resume;
+  bool is_readable() const {
+    return (value_ & READ_ALL) != EMPTY;
+  }
 
-  evo::task<poll_status> poll(int fd, poll_op op, timeunit_t timeout);
-  evo::task<poll_status> poll(int fd, poll_op op);
-
-  void run(timeunit_t);
-  void process_event(poll_info* info);
-
-  virtual void resume_handles() = 0;
-
-// #ifdef __APPLE__
-//   static poll_status event_to_status(u_short flags);
-// #else
-//   static poll_status event_to_status(uint32_t flags);
-// #endif
+  bool is_writable() const {
+    return (value_ & WRITE_ALL) != EMPTY;
+  }
+private:
+  u8 value_ {0};
 };
 
-template <typename ThreadPoolType = void>
-class io_scheduler: public io_scheduler_base {
-  typedef ThreadPoolType threadpool_t;
+struct IODirection {
+  static IODirection read() {
+    return IODirection {false};
+  }
 
-  std::shared_ptr<threadpool_t> pool;
-public:
-  io_scheduler() = delete;
-  io_scheduler(std::shared_ptr<threadpool_t> p);
+  static IODirection write() {
+    return IODirection {true};
+  }
 
-  virtual void resume_handles() override;
+  bool is_write() const {
+    return is_write_;
+  }
+
+  u8 mask() const {
+    if (is_write_) {
+      return Ready::WRITABLE | Ready::WRITE_CLOSED | Ready::WRITE_CANCELED;
+    } else {
+      return Ready::READABLE | Ready::READ_CLOSED | Ready::READ_CANCELED;
+    }
+  }
+private:
+  IODirection(bool b): is_write_(b) {}
+  bool is_write_ {false};
 };
 
-template <>
-class io_scheduler<void>: public io_scheduler_base {
-public:
-  virtual void resume_handles() override;
+template <typename W>
+struct ScheduledIO {
+  Ready readiness_ { Ready::EMPTY };
+  W reader_;
+  W writer_;
+
+  ScheduledIO(Ready readiness, W reader, W writer):
+    readiness_(readiness),
+    reader_(std::move(reader)),
+    writer_(std::move(writer))
+  {}
+
+  bool check_ready(IODirection, W);
+
+  void set_waker(IODirection, W);
+
+  void set_readiness(std::function<Ready(Ready)>);
+  void wake(Ready readiness);
 };
 
-} // namespace evo
-
-#endif // _IO_SCHEDULER_H
+} // namespace evo::coroutine
