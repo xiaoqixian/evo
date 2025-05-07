@@ -5,8 +5,26 @@
 
 #pragma once
 
+#include <coroutine>
+#include <deque>
+#include "evo/coroutine/utilities"
+
 namespace evo::coro {
 
-class Context {};
+class Context {
+  friend class Runtime;
+  std::deque<std::coroutine_handle<>> tasks_;
+public:
+  void push(std::coroutine_handle<> h) {
+    tasks_.emplace_back(h);
+  }
+
+  void push_front(std::coroutine_handle<> h) {
+    tasks_.emplace_front(h);
+  }
+};
+
+extern thread_local ThreadLocalWrapper<Context> GLOBAL_CONTEXT;
+
 
 } // namespace evo::coro

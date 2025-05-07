@@ -1,0 +1,28 @@
+// -*- C++ -*-
+// Date:   Tue May 06 20:55:10 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include <coroutine>
+#include "evo/coroutine/context"
+
+namespace evo::coro {
+
+class LocalScheduler {
+public:
+  void schedule(std::coroutine_handle<> h) {
+    GLOBAL_CONTEXT.with([h](auto& ctx) {
+      ctx.push(h);
+    });
+  }
+
+  void yield_now(std::coroutine_handle<> h) {
+    GLOBAL_CONTEXT.with([h](auto& ctx) {
+      ctx.push_front(h);
+    });
+  }
+};
+
+} // namespace evo::coro

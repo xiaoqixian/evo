@@ -5,17 +5,32 @@
 
 #pragma once
 
+#include "evo/macros"
 #include <coroutine>
+#include <utility>
+#include "evo/coroutine/scheduler"
+
 namespace evo::coro {
 
 class Waker {
-  void* data_;
+  std::coroutine_handle<> handle_;
+  LocalScheduler scheduler_;
 public:
-  bool await_ready() {
-    return false;
+  Waker(std::coroutine_handle<> h): handle_(h) {}
+
+  Waker(Waker && other): handle_(std::exchange(other.handle_, nullptr)) {}
+
+  ~Waker() {
+    if (handle_ != nullptr) {
+      FATAL("Waker should not be destroyed with a non-nullptr handle");
+    }
   }
 
-  void await_suspend(std::coroutine_handle<> h) {
+  void wake() {
+    if (handle_ != nullptr) {
+      scheduler_.schedule(handle_);
+      handle_ = nullptr;
+    }
   }
 };
 

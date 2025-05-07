@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <fmt/format.h>
 #include "evo/coroutine/net/tcp/listener"
-#include "evo/coroutine/net/tcp/accept"
+#include "evo/coroutine/op"
 
 namespace evo::coro::net {
 
@@ -33,7 +33,7 @@ TcpListener TcpListener::bind(int port) {
 }
 
 task<TcpStream> TcpListener::accept() {
-  const int fd = co_await OpAccept::accept(fd_);
+  const int fd = co_await Op::accept(fd_);
   co_return TcpStream(fd);
 }
 

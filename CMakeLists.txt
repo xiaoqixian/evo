@@ -18,17 +18,15 @@ set(EVO_THIRD_PARTY_INCLUDE_DIR
   ${PROJECT_SOURCE_DIR}/third_party/fmt/include
 )
 
-file(GLOB evo_src "${PROJECT_SOURCE_DIR}/src/*.cpp")
-file(GLOB evo_coro_src "${PROJECT_SOURCE_DIR}/src/coroutine/*.cpp")
+file(GLOB_RECURSE evo_src "${PROJECT_SOURCE_DIR}/src/*.cpp")
 
 include_directories(${EVO_INCLUDE_DIR} ${EVO_THIRD_PARTY_INCLUDE_DIR})
 
 add_subdirectory(third_party)
 add_subdirectory(test)
 
-# add_library(
-#   evo
-#   SHARED
-#   ${evo_src}
-#   ${evo_coro_src}
-# )
+add_library(
+  evo
+  SHARED
+  ${evo_src}
+)

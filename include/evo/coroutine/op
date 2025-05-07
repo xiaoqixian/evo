@@ -5,6 +5,8 @@
 
 #include "evo/coroutine/driver"
 #include "evo/coroutine/io_scheduler"
+#include "evo/coroutine/net/tcp/accept"
+#include "evo/coroutine/utilities"
 #include "evo/debug"
 #include <cerrno>
 #include <concepts>
@@ -29,26 +31,31 @@ concept OpAble = requires (Op op) {
 template <__op_detail::OpAble O>
 class OpAwaiter {
   O op_;
-  Driver& driver_;
   using Ret = O::return_type;
   Ret ret_;
 
 public:
-  OpAwaiter(O op): op_(op) {
-    DEBUG_ASSERT(GLOBAL_DRIVER != nullptr, "");
-    driver_ = *GLOBAL_DRIVER;
-  }
+  OpAwaiter(O op): op_(op) {}
 
   bool await_ready() {
     return false;
   }
 
   bool await_suspend(std::coroutine_handle<> h) {
-    return driver_.check_ready(op_, h);
+    return GLOBAL_DRIVER.with([this, h](auto& driver) {
+      return driver.check_ready(this->op_, h);
+    });
   }
 
   Ret await_resume() noexcept {
     return op_.invoke();
+  }
+};
+
+class Op {
+public:
+  static OpAwaiter<net::Accept> accept(Fd const& fd) {
+    return OpAwaiter(net::Accept(fd));
   }
 };
 

@@ -5,10 +5,11 @@
 
 #pragma once
 
-#include <coroutine>
 #include <functional>
+#include <optional>
 #include <sys/epoll.h>
 #include "evo/types"
+#include "evo/coroutine/waker"
 
 namespace evo::coro {
 
@@ -33,6 +34,16 @@ struct Ready {
     }
     if (events & EPOLLOUT) {
       value |= WRITABLE;
+    }
+    if (events & EPOLLRDHUP) {
+    value |= READ_CLOSED;
+    }
+    if (events & EPOLLHUP) {
+      // 表示对端关闭写或读，保守处理为两者都关闭
+      value |= READ_CLOSED | WRITE_CLOSED;
+    }
+    if (events & EPOLLERR) {
+      value |= READ_CANCELED | WRITE_CANCELED;
     }
     return Ready {value};
   }
@@ -85,21 +96,22 @@ private:
   bool is_write_ {false};
 };
 
-template <typename W>
 struct ScheduledIO {
   Ready readiness_ { Ready::EMPTY };
-  W reader_;
-  W writer_;
+  std::optional<Waker> reader_;
+  std::optional<Waker> writer_;
 
-  ScheduledIO(Ready readiness, W reader, W writer):
+  ScheduledIO() = default;
+
+  ScheduledIO(Ready readiness, Waker reader, Waker writer):
     readiness_(readiness),
     reader_(std::move(reader)),
     writer_(std::move(writer))
   {}
 
-  bool check_ready(IODirection, W);
+  bool check_ready(IODirection, Waker);
 
-  void set_waker(IODirection, W);
+  void set_waker(IODirection, Waker);
 
   void set_readiness(std::function<Ready(Ready)>);
   void wake(Ready readiness);

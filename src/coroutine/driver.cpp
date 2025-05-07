@@ -6,6 +6,19 @@
 
 namespace evo::coro {
 
-thread_local std::unique_ptr<Driver> GLOBAL_DRIVER = nullptr;
+thread_local ThreadLocalWrapper<Driver> GLOBAL_DRIVER = {};
+
+void Driver::park(int timeout) {
+  DRIVER_PROXY(park, timeout);
+}
+
+void Driver::register_fd(int fd) {
+  DRIVER_PROXY(register_fd, fd);
+}
+
+void Driver::deregister_fd(int fd) {
+  DRIVER_PROXY(deregister_fd, fd);
+}
+
 
 } // namespace evo::coro

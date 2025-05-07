@@ -5,16 +5,24 @@
 
 #pragma once
 
-#include <atomic>
-#include <coroutine>
-#include <deque>
-#include <functional>
-#include <unordered_map>
-#include "evo/debug"
-#include "evo/types"
-#include "evo/macros"
+#include "evo/coroutine/driver"
+#include "evo/coroutine/utilities"
 #include "evo/coroutine/context"
+#include <coroutine>
 
 namespace evo::coro {
+
+class Runtime;
+
+struct EpollDriverTag {};
+
+class Runtime {
+  Context ctx_;
+  std::unique_ptr<Driver> driver_;
+public:
+  Runtime(EpollDriverTag): driver_(std::make_unique<EpollDriver>()) {}
+
+  void block_on(std::coroutine_handle<>);
+};
 
 } // namespace evo::coro

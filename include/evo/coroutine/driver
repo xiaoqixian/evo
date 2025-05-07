@@ -5,22 +5,69 @@
 
 #pragma once
 
-#include "evo/types"
+#include "evo/coroutine/io_scheduler"
+#include "evo/debug"
 #include "evo/macros"
-#include <chrono>
-#include <memory>
-#include <ratio>
+#include <sys/epoll.h>
 #include <unordered_map>
 #include <coroutine>
+#include "evo/coroutine/utilities"
+
+#define DRIVER_PROXY(method, ...)\
+switch (driver_type_) {\
+  case DriverType::Epoll:\
+    return static_cast<EpollDriver*>(this)->method(__VA_ARGS__);\
+  case DriverType::Empty:\
+    FATAL("");\
+}
 
 namespace evo::coro {
 
+enum class DriverType {
+  Empty,
+  Epoll
+};
+
 class Driver {
+  DriverType driver_type_ {DriverType::Empty};
+protected:
+  Driver(DriverType t): driver_type_(t) {}
 public:
   template <typename O>
   bool check_ready(O& op, std::coroutine_handle<> h);
+
+  void park(int);
+
+  void register_fd(int);
+  void deregister_fd(int);
 };
 
-extern thread_local std::unique_ptr<Driver> GLOBAL_DRIVER;
+extern thread_local ThreadLocalWrapper<Driver> GLOBAL_DRIVER;
+
+class EpollDriver: public Driver {
+  int epfd_ {-1};
+  std::unordered_map<int, ScheduledIO> io_dispatch_;
+public:
+  EpollDriver();
+
+  template <typename O>
+  bool check_ready(O& op, std::coroutine_handle<> h);
+
+  void park(int);
+
+  void register_fd(int);
+  void deregister_fd(int);
+};
+
+template <typename O>
+bool Driver::check_ready(O& op, std::coroutine_handle<> h) {
+  DRIVER_PROXY(check_ready, op, h);
+}
+template <typename O>
+bool EpollDriver::check_ready(O& op, std::coroutine_handle<> h) {
+  auto const [idx, direction] = op.interest();
+  DEBUG_ASSERT(io_dispatch_.contains(idx), "");
+  return io_dispatch_[idx].check_ready(direction, Waker(h));
+}
 
 } // namespace evo::coro
