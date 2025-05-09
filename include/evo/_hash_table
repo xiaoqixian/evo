@@ -4,10 +4,45 @@
 // Author: https://github.com/xiaoqixian
 
 #include "evo/types"
-namespace evo {
+#include <memory>
+
+namespace evo::__hash_table_ns {
 
 inline usize constrain_hash(usize h, usize bc) {
   return !(bc & (bc-1)) ? (h & (bc - 1)) : (h < bc ? h : h % bc);
 }
+
+template <typename T>
+class hash_node {
+public:
+  using node_pointer = hash_node*;
+  using next_pointer = node_pointer;
+
+  explicit hash_node(node_pointer next, size_t hash) noexcept
+    : next_(next), hash_(hash) {}
+
+  ~hash_node() {}
+
+  size_t hash() const noexcept { return hash_; }
+
+  T& get_value() { return value_; }
+private:
+  size_t hash_;
+  next_pointer next_;
+  union {
+    T value_;
+  };
+};
+
+template <typename T, typename Hash, typename Equal, typename Alloc>
+class hash_table {
+public:
+  using value_type = T;
+  using node_pointer = hash_node<value_type>;
+  using next_pointer = typename node_pointer::next_pointer;
+
+private:
+  std::unique_ptr<next_pointer[]> buckets_;
+};
 
 } // namespace evo
