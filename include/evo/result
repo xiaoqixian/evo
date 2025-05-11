@@ -5,32 +5,87 @@
 
 #pragma once
 
+#include "evo/debug"
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <variant>
+
+#define __RESULT_DEFINE_CONST_BOOL(name, trait)\
+static constexpr bool name = trait<T> && trait<E>;
+
 namespace evo {
 
 template <typename T, typename E>
 class Result {
-  std::variant<T, E> value_;
-  Result() = default;
+  using Var = std::variant<char, T, E>;
+  Var value_;
+
+  static constexpr size_t OK_IDX = 1;
+  static constexpr size_t ERR_IDX = 2;
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_NOTHROW_COPY, std::is_nothrow_copy_constructible_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_NOTHROW_MOVE, std::is_nothrow_move_constructible_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_COPYABLE, std::is_copy_constructible_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_MOVABLE, std::is_move_constructible_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_COPY_ASSIGNABLE, std::is_copy_assignable_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_MOVE_ASSIGNABLE, std::is_move_assignable_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_NOTHROW_COPY_ASSIGNABLE, std::is_nothrow_copy_assignable_v);
+
+  __RESULT_DEFINE_CONST_BOOL(BOTH_NOTHROW_MOVE_ASSIGNABLE, std::is_nothrow_move_assignable_v);
+
+  Result(Var value): value_(std::move(value)) {}
 
 public:
+  using ok_type = T;
+  using err_type = E;
+
+  Result(Result const& other) noexcept(BOTH_NOTHROW_COPY)
+    requires BOTH_COPYABLE
+    : value_(other.value_)
+  {}
+
+  Result(Result && other) noexcept(BOTH_NOTHROW_MOVE)
+    requires BOTH_MOVABLE
+    : value_(std::move(other.value_))
+  {}
+
+  Result& operator=(Result const& other) noexcept(BOTH_NOTHROW_COPY_ASSIGNABLE)
+    requires BOTH_COPY_ASSIGNABLE
+  {
+    value_ = other.value_;
+    return *this;
+  }
+
+  Result& operator=(Result && other) noexcept(BOTH_NOTHROW_MOVE_ASSIGNABLE)
+    requires BOTH_MOVE_ASSIGNABLE
+  {
+    value_ = std::move(other.value_);
+    return *this;
+  }
+
   template <typename U>
   requires std::is_constructible_v<T, U&&>
-  static Result Ok(U&& ok) noexcept(std::is_nothrow_constructible_v<T, U&&>);
+  static Result ok(U&& ok) noexcept(std::is_nothrow_constructible_v<T, U&&>);
 
   template <typename Y>
   requires std::is_constructible_v<E, Y&&>
-  static Result Err(Y&& err) noexcept(std::is_nothrow_constructible_v<E, Y&&>);
+  static Result err(Y&& err) noexcept(std::is_nothrow_constructible_v<E, Y&&>);
 
   bool is_ok() const noexcept {
-    return value_.index() == 0;
+    DEBUG_ASSERT(value_.index() != 0, "");
+    return value_.index() == OK_IDX;
   }
 
   bool is_err() const noexcept {
-    return value_.index() == 1;
+    DEBUG_ASSERT(value_.index() != 0, "");
+    return value_.index() == ERR_IDX;
   }
 
   T& unwrap() &;
@@ -49,71 +104,71 @@ public:
 template <typename T, typename E>
 template <typename U>
 requires std::is_constructible_v<T, U&&>
-Result<T, E> Result<T, E>::Ok(U&& ok) 
+Result<T, E> Result<T, E>::ok(U&& ok) 
   noexcept(std::is_nothrow_constructible_v<T, U&&>)
 {
-  return Result { std::variant(std::in_place_index<0>, std::forward<U>(ok)) };
+  return Result { Var(std::in_place_index<OK_IDX>, std::forward<U>(ok)) };
 }
 
 template <typename T, typename E>
 template <typename Y>
 requires std::is_constructible_v<E, Y&&>
-Result<T, E> Result<T, E>::Err(Y&& err) 
+Result<T, E> Result<T, E>::err(Y&& err) 
   noexcept(std::is_nothrow_constructible_v<E, Y&&>)
 {
-  return Result { std::variant(std::in_place_index<1>, std::forward<Y>(err)) };
+  return Result { Var(std::in_place_index<ERR_IDX>, std::forward<Y>(err)) };
 }
 
 template <typename T, typename E>
 T& Result<T, E>::unwrap() & {
-  if (value_.index() != 0) {
+  if (value_.index() != OK_IDX) {
     throw std::runtime_error("unwrap on Err");
   }
-  return std::get<0>(value_);
+  return std::get<OK_IDX>(value_);
 }
 
 template <typename T, typename E>
 T&& Result<T, E>::unwrap() && {
-  if (value_.index() != 0) {
+  if (value_.index() != OK_IDX) {
     throw std::runtime_error("unwrap on Err");
   }
-  return std::move(std::get<0>(value_));
+  return std::move(std::get<OK_IDX>(value_));
 }
 
 template <typename T, typename E>
 E& Result<T, E>::unwrap_err() & {
-  if (value_.index() != 1) {
+  if (value_.index() != ERR_IDX) {
     throw std::runtime_error("unwrap_err on Ok");
   }
-  return std::get<1>(value_);
+  return std::get<ERR_IDX>(value_);
 }
 
 template <typename T, typename E>
 E&& Result<T, E>::unwrap_err() && {
-  if (value_.index() != 1) {
+  if (value_.index() != ERR_IDX) {
     throw std::runtime_error("unwrap_err on Ok");
   }
-  return std::move(std::get<1>(value_));
+  return std::move(std::get<ERR_IDX>(value_));
 }
 
 template <typename T, typename E>
 T& Result<T, E>::unchecked_unwrap() & noexcept {
-  return std::get<0>(value_);
+  return std::get<OK_IDX>(value_);
 }
 
 template <typename T, typename E>
 T&& Result<T, E>::unchecked_unwrap() && noexcept {
-  return std::move(std::get<0>(value_));
+  return std::move(std::get<OK_IDX>(value_));
 }
 
 template <typename T, typename E>
 E& Result<T, E>::unchecked_unwrap_err() & noexcept {
-  return std::get<1>(value_);
+  return std::get<ERR_IDX>(value_);
 }
 
 template <typename T, typename E>
 E&& Result<T, E>::unchecked_unwrap_err() && noexcept {
-  return std::move(std::get<1>(value_));
+  return std::move(std::get<ERR_IDX>(value_));
 }
 
 } // namespace evo

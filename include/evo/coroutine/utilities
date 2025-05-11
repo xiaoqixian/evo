@@ -6,6 +6,8 @@
 #pragma once
 
 #include "evo/debug"
+#include <type_traits>
+#include <utility>
 
 namespace evo::coro {
 
@@ -26,7 +28,111 @@ public:
     DEBUG_ASSERT(data_, "");
     return f(*data_);
   }
+
+  T& ref() {
+    return *data_;
+  }
 };
 
+template <typename T>
+class Ready {
+  static_assert(!std::is_void_v<T> && !std::is_reference_v<T> && !std::is_array_v<T>, "");
+  bool is_ready_ {false};
+  union {
+    T value_;
+  };
+
+  struct __construct_ready_tag_t {};
+
+  template <typename... Args>
+  Ready(__construct_ready_tag_t, Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+    : is_ready_(true)
+  {
+    new (&value_) T(std::forward<Args>(args)...);
+  }
+
+  Ready() noexcept {}
+
+public:
+  using value_type = T;
+
+  static Ready not_ready() noexcept {
+    return Ready();
+  }
+
+  template <typename... Args>
+  requires std::is_constructible_v<T, Args...>
+  static Ready ready(Args&&... args) {
+    return Ready(__construct_ready_tag_t {}, std::forward<Args>(args)...);
+  }
+
+  Ready(Ready const& other) noexcept(std::is_nothrow_copy_constructible_v<T>)
+    requires std::is_copy_constructible_v<T>
+    : is_ready_(other.is_ready_)
+  {
+    if (is_ready_) {
+      new (&value_) T(other.value_);
+    }
+  }
+
+  Ready(Ready && other) noexcept(std::is_nothrow_move_constructible_v<T>)
+    requires std::is_move_constructible_v<T>
+    : is_ready_(std::exchange(other.is_ready_, false))
+  {
+    if (is_ready_) {
+      new (&value_) T(std::move(other.value_));
+    }
+  }
+
+  ~Ready() {
+    if (is_ready_) {
+      value_.~T();
+      is_ready_ = false;
+    }
+  }
+
+  Ready& operator=(Ready const&) = delete;
+  Ready& operator=(Ready &&)     = delete;
+
+  bool is_ready() const {
+    return is_ready_;
+  }
+
+  T& value() {
+    return value_;
+  }
+
+  T const& value() const {
+    return value_;
+  }
+
+  void reset() noexcept {
+    is_ready_ = false;
+  }
+
+  template <typename... Args>
+  void emplace(Args&&... args) {
+    if (is_ready_) {
+      value_.~T();
+    } else {
+      is_ready_ = true;
+    }
+    new (&value_) T(std::forward<Args>(args)...);
+  }
+
+  void swap(Ready& other) {
+    if (is_ready_ && other.is_ready_) {
+      std::swap(value_, other.value_);
+    } else if (is_ready_ && !other.is_ready_) {
+      new (&other.value_) T(std::move(value_));
+      value_.~T();
+      std::swap(is_ready_, other.is_ready_);
+    } else if (!is_ready_ && other.is_ready_) {
+      new (&value_) T(std::move(other.value_));
+      other.value_.~T();
+      std::swap(is_ready_, other.is_ready_);
+    }
+  }
+};
 
 } // namespace evo::coro

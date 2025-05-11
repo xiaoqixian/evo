@@ -1,46 +1,53 @@
 // -*- C++ -*-
-/*
- * FILE: debug.h
- * Copyright (C) LunarEclipse
- * 
- * Description:
- *   Some macros for debug are defined here
- */
+// Date:   Sat May 10 15:52:30 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
 
-#ifndef DEBUG_H
-#define DEBUG_H
+#pragma once
 
-#include <cstring>
-#include <cstdio>
-#include <errno.h>
-#include <stdlib.h>
+#ifndef NDEBUG
 
-#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#include <iostream>
+#include <fmt/format.h>
 
-#define YELLOW(M) "\033[0;33m" M "\033[0m"
+#endif
 
-#ifdef NO_DEBUG
-#define DEBUG(M, ...)
+
+namespace {
+constexpr const char* __debug_get_filename(const char* path) {
+  const char* filename = path;
+  for (const char* p = path; *p; ++p) {
+    if (*p == '/') {
+      filename = p + 1;
+    }
+  }
+  return filename;
+}
+}
+namespace evo {
+
+#ifndef NDEBUG
+
+#define LOG_TRACE(fmt_str, ...) do {\
+  std::cout << __debug_get_filename(__FILE__) << ':' << __LINE__ << ' ' << (fmt::format(fmt_str, ##__VA_ARGS__)) << '\n';\
+} while (0);
+
+#define LOG_FATAL(fmt_str, ...) do {\
+  std::cerr << "\033[31mERROR: " << __debug_get_filename(__FILE__) << ':' << __LINE__ << ' ' << (fmt::format(fmt_str, ##__VA_ARGS__)) << "\033[0m\n"; \
+  std::terminate();\
+} while (0);
+
+#define DEBUG_ASSERT(cond, fmt_str, ...) do {\
+  if (!(cond)) {\
+    LOG_FATAL(fmt_str, ##__VA_ARGS__);\
+  }\
+} while (0);
 
 #else
-/* #define DEBUG(M, ...) fprintf(stderr, "\033[0;33m[DEBUG]\033[0m %s: %d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__); */
-#define DEBUG(M, ...) fprintf(stderr, YELLOW("[DEBUG]") " %s/%d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
-#endif
 
-#define CLEAN_ERRNO() (errno == 0 ? "None" : strerror(errno))
-
-#define LOG_ERR(M, ...) fprintf(stderr, "\033[0;31m[ERROR]\033[0m %s/%d: " M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__);
-
-#define LOG_WARN(M, ...) fprintf(stderr, "\033;[0;35m[WARN]\033[0m (%s: %d: errno: %s)" M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__)
-
-#define LOG_INFO(M, ...) fprintf(stderr, "\033[0;36m" "[INFO] \33[0m (%s: %d)" M "\n", __FILENAME__, __LINE__, ##__VA_ARGS__)
-
-#define CHECK(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__);} 
-
-#define CHECK_EXIT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
-
-#define CHECK_DEBUG(A, M, ...) if (!(A)) { DEBUG(M, ##__VA_ARGS__);}
-
-#define DEBUG_ASSERT(A, M, ...) if (!(A)) { LOG_ERR(M, ##__VA_ARGS__); exit(1);} 
+#define LOG_TRACE(fmt_str, ...) ((void)0)
+#define DEBUG_ASSERT(cond, fmt_str, ...) ((void)0)
 
 #endif
+
+} // namespace evo

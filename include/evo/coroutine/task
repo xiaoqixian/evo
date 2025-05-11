@@ -24,7 +24,7 @@ using task_promise_base = promise_base<Ret>;
 
 template <typename Ret>
 struct task_promise: task_promise_base<Ret> {
-  std::coroutine_handle<> continuation;
+  std::coroutine_handle<> continuation_;
 
   task<Ret> get_return_object() {
     return task<Ret>(std::coroutine_handle<task_promise<Ret>>::from_promise(*this));
@@ -42,8 +42,8 @@ struct task_promise: task_promise_base<Ret> {
     std::coroutine_handle<> 
     await_suspend(std::coroutine_handle<P> coro) noexcept {
       auto const& prom = coro.promise();
-      if ( prom.continuation != nullptr ) {
-        return prom.continuation;
+      if ( prom.continuation_ != nullptr ) {
+        return prom.continuation_;
       } else {
         return std::noop_coroutine();
       }
@@ -58,7 +58,7 @@ struct task_promise: task_promise_base<Ret> {
   }
 
   void set_continuation(std::coroutine_handle<> c) noexcept {
-    this->continuation = c;
+    continuation_ = c;
   }
 };
 
@@ -70,41 +70,40 @@ public:
   using promise_type = task_impl::task_promise<Ret>;
   using handle_t  = std::coroutine_handle<promise_type>;
 
-  constexpr task() noexcept: handle(nullptr) {}
-  explicit constexpr task(handle_t h) noexcept: handle(h) {}
+  constexpr task() noexcept: handle_(nullptr) {}
+  explicit constexpr task(handle_t h) noexcept: handle_(h) {}
 
   task(task const&) = delete;
   task(task&& other) noexcept 
-    : handle(std::exchange(other.handle, nullptr)) {}
+    : handle_(std::exchange(other.handle_, nullptr)) {}
 
   task& operator=(task const&) = delete;
   task& operator=(task&& other) noexcept {
     if (std::addressof(other) != this) {
-      if (this->handle != nullptr) {
-        this->handle.destroy();
+      if (handle_ != nullptr) {
+        handle_.destroy();
       }
-      this->handle = std::exchange(other.handle, nullptr);
+      handle_ = std::exchange(other.handle_, nullptr);
     }
     return *this;
   }
 
   inline bool is_ready() const noexcept {
-    return this->handle == nullptr || this->handle.done();
+    return handle_ == nullptr || handle_.done();
   }
 
   inline operator bool() const noexcept {
-    return this->is_ready();
+    return is_ready();
   }
 
   inline void resume() noexcept {
-    if (this->handle != nullptr) {
-      this->handle.resume();
+    if (handle_ != nullptr) {
+      handle_.resume();
     }
   }
 
   struct awaiter_base {
-    handle_t handle;
-    awaiter_base(handle_t h) noexcept: handle(h) {}
+    awaiter_base(handle_t h) noexcept: handle_(h) {}
 
     inline bool await_ready() const noexcept {
       return false;
@@ -112,15 +111,17 @@ public:
 
     std::coroutine_handle<> 
     await_suspend(std::coroutine_handle<> continuation) noexcept {
-      this->handle.promise().set_continuation(continuation);
-      return this->handle;
+      handle_.promise().set_continuation(continuation);
+      return handle_;
     }
+  protected:
+    handle_t handle_;
   };
 
   template <typename R = Ret>
   struct awaiter: public awaiter_base {
     auto await_resume() const noexcept {
-      return this->handle.promise().result();
+      return awaiter_base::handle_.promise().result();
     }
   };
 
@@ -130,10 +131,14 @@ public:
   };
 
   auto operator co_await() noexcept {
-    return awaiter<>(this->handle);
+    return awaiter<>(handle_);
+  }
+
+  auto handle() const noexcept {
+    return handle_;
   }
 private:
-  handle_t handle;
+  handle_t handle_;
 };
 
 } // namespace evo::coro

@@ -13,7 +13,7 @@
 
 namespace evo::coro {
 
-struct Ready {
+struct Readiness {
   static constexpr u8 EMPTY          = 0b000000;
   static constexpr u8 READABLE       = 0b000001;
   static constexpr u8 WRITABLE       = 0b000010;
@@ -25,9 +25,9 @@ struct Ready {
   static constexpr u8 READ_ALL = READABLE | READ_CANCELED | READ_CLOSED;
   static constexpr u8 WRITE_ALL = WRITABLE | WRITE_CANCELED | WRITE_CLOSED;
 
-  Ready(u8 val): value_(val) {}
+  Readiness(u8 val): value_(val) {}
 
-  static Ready from_epoll_events(u32 events) {
+  inline static Readiness from_epoll_events(u32 events) {
     u8 value = EMPTY;
     if (events & EPOLLIN) {
       value |= READABLE;
@@ -45,10 +45,10 @@ struct Ready {
     if (events & EPOLLERR) {
       value |= READ_CANCELED | WRITE_CANCELED;
     }
-    return Ready {value};
+    return Readiness {value};
   }
 
-  void set(u8 val) {
+  inline void set(u8 val) {
     value_ = val;
   }
   
@@ -56,15 +56,15 @@ struct Ready {
     return value_;
   }
   
-  bool is_empty() const {
+  inline bool is_empty() const {
     return value_ == EMPTY;
   }
 
-  bool is_readable() const {
+  inline bool is_readable() const {
     return (value_ & READ_ALL) != EMPTY;
   }
 
-  bool is_writable() const {
+  inline bool is_writable() const {
     return (value_ & WRITE_ALL) != EMPTY;
   }
 private:
@@ -80,15 +80,15 @@ struct IODirection {
     return IODirection {true};
   }
 
-  bool is_write() const {
+  inline bool is_write() const {
     return is_write_;
   }
 
-  u8 mask() const {
+  inline u8 mask() const {
     if (is_write_) {
-      return Ready::WRITABLE | Ready::WRITE_CLOSED | Ready::WRITE_CANCELED;
+      return Readiness::WRITABLE | Readiness::WRITE_CLOSED | Readiness::WRITE_CANCELED;
     } else {
-      return Ready::READABLE | Ready::READ_CLOSED | Ready::READ_CANCELED;
+      return Readiness::READABLE | Readiness::READ_CLOSED | Readiness::READ_CANCELED;
     }
   }
 private:
@@ -97,13 +97,13 @@ private:
 };
 
 struct ScheduledIO {
-  Ready readiness_ { Ready::EMPTY };
+  Readiness readiness_ { Readiness::EMPTY };
   std::optional<Waker> reader_;
   std::optional<Waker> writer_;
 
   ScheduledIO() = default;
 
-  ScheduledIO(Ready readiness, Waker reader, Waker writer):
+  ScheduledIO(Readiness readiness, Waker reader, Waker writer):
     readiness_(readiness),
     reader_(std::move(reader)),
     writer_(std::move(writer))
@@ -113,8 +113,16 @@ struct ScheduledIO {
 
   void set_waker(IODirection, Waker);
 
-  void set_readiness(std::function<Ready(Ready)>);
-  void wake(Ready readiness);
+  template <typename F>
+  inline void set_readiness(F&& f) {
+    readiness_ = f(readiness_);
+  }
+
+  void clear_readiness(Readiness mask) {
+    readiness_.set(readiness_ - mask);
+  }
+
+  void wake(Readiness readiness);
 };
 
 } // namespace evo::coroutine

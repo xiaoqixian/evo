@@ -3,20 +3,9 @@
 // Mail:   lunar_ubuntu@qq.com
 // Author: https://github.com/xiaoqixian
 
-#include "evo/types"
 namespace evo::coro {
 
-namespace __runtime_detail {
-
-enum class Stage: u8 {
-  Running,
-  Finished,
-  Consumed
-};
-
-struct RawTask {
-  
-};
+namespace __detail {
 
 } // namespace __runtime_detail
 

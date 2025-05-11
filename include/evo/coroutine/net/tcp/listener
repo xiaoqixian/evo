@@ -31,7 +31,7 @@ public:
   TcpListener& operator=(TcpListener const&) = delete;
   TcpListener& operator=(TcpListener &&) = delete;
 
-  static TcpListener bind(int port);
+  static TcpListener bind(u16 port);
 
   task<TcpStream> accept();
 };

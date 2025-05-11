@@ -9,28 +9,18 @@
 #include <coroutine>
 #include <utility>
 #include "evo/coroutine/scheduler"
+#include "evo/coroutine/raw_task"
 
 namespace evo::coro {
 
 class Waker {
-  std::coroutine_handle<> handle_;
+  RawTask task_;
   LocalScheduler scheduler_;
 public:
-  Waker(std::coroutine_handle<> h): handle_(h) {}
+  explicit Waker(void* task) noexcept: task_(static_cast<TaskScheme*>(task)) {}
 
-  Waker(Waker && other): handle_(std::exchange(other.handle_, nullptr)) {}
-
-  ~Waker() {
-    if (handle_ != nullptr) {
-      FATAL("Waker should not be destroyed with a non-nullptr handle");
-    }
-  }
-
-  void wake() {
-    if (handle_ != nullptr) {
-      scheduler_.schedule(handle_);
-      handle_ = nullptr;
-    }
+  inline void wake() {
+    scheduler_.schedule(task_);
   }
 };
 

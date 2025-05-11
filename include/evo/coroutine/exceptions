@@ -1,0 +1,23 @@
+// -*- C++ -*-
+// Date:   Fri May 09 22:50:47 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include "evo/result"
+#include <cstring>
+namespace evo::coro {
+
+class UnixIOException: public Result<int, int> {
+public:
+  inline int unwrap_or_throw() {
+    if (is_err()) {
+      throw std::runtime_error(std::strerror(unchecked_unwrap_err()));
+    } else {
+      return unchecked_unwrap();
+    }
+  }
+};
+
+} // namespace evo::coro

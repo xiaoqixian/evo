@@ -23,6 +23,26 @@ switch (driver_type_) {\
 
 namespace evo::coro {
 
+namespace __op_detail {
+
+template <typename T>
+struct is_ready: std::false_type {};
+
+template <typename T>
+struct is_ready<Ready<T>>: std::is_move_assignable<T> {};
+
+template <typename T>
+concept IsReady = is_ready<T>::value;
+
+} // namespace op_detail
+
+template <typename Op>
+concept OpAble = requires (Op op) {
+  {op.interest()} -> std::same_as<std::tuple<int, IODirection>>;
+  {op.invoke()} -> __op_detail::IsReady;
+  typename Op::return_type;
+};
+
 enum class DriverType {
   Empty,
   Epoll
@@ -40,6 +60,9 @@ public:
 
   void register_fd(int);
   void deregister_fd(int);
+
+  template <typename O, typename Ret = typename O::return_type>
+  Ready<Ret> poll(O& op, void* task);
 };
 
 extern thread_local ThreadLocalWrapper<Driver> GLOBAL_DRIVER;
@@ -51,23 +74,52 @@ public:
   EpollDriver();
 
   template <typename O>
-  bool check_ready(O& op, std::coroutine_handle<> h);
+  bool check_ready(O& op, void* task);
 
   void park(int);
 
   void register_fd(int);
   void deregister_fd(int);
+
+  template <typename O, typename Ret = typename O::return_type>
+  Ready<Ret> poll(O& op, void* task);
 };
 
 template <typename O>
 bool Driver::check_ready(O& op, std::coroutine_handle<> h) {
   DRIVER_PROXY(check_ready, op, h);
 }
+
+template <typename O, typename Ret>
+Ready<Ret> Driver::poll(O& op, void* task) {
+  DRIVER_PROXY(poll, op, task);
+}
+
 template <typename O>
-bool EpollDriver::check_ready(O& op, std::coroutine_handle<> h) {
+bool EpollDriver::check_ready(O& op, void* task) {
   auto const [idx, direction] = op.interest();
   DEBUG_ASSERT(io_dispatch_.contains(idx), "");
-  return io_dispatch_[idx].check_ready(direction, Waker(h));
+  return io_dispatch_[idx].check_ready(direction, Waker(task));
+}
+
+template <typename O, typename Ret>
+Ready<Ret> EpollDriver::poll(O& op, void* task) {
+  auto const [idx, direction] = op.interest();
+  DEBUG_ASSERT(io_dispatch_.contains(idx), "");
+
+  auto& io = io_dispatch_[idx];
+  bool is_ready = io.check_ready(direction, Waker(task));
+  
+  if (!is_ready) {
+    return Ready<Ret>::not_ready();
+  }
+
+  auto res = op.invoke();
+  if (!res.is_ready()) {
+    io.clear_readiness(direction.mask());
+    io.set_waker(direction, Waker(task));
+  }
+  return res;
 }
 
 } // namespace evo::coro

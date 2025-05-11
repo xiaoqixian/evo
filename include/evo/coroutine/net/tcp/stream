@@ -6,6 +6,8 @@
 #pragma once
 
 #include "evo/coroutine/fd"
+#include "evo/coroutine/task"
+#include <netinet/in.h>
 
 namespace evo::coro::net {
 
@@ -14,6 +16,14 @@ class TcpStream {
   
 public:
   TcpStream(int raw_fd): fd_(raw_fd) {}
+  TcpStream(Fd fd): fd_(std::move(fd)) {}
+
+  task<int> read(char* buf, size_t size);
+
+  task<int> write(char const* buf, size_t size);
+
+  static task<TcpStream> connect(const char* addr, u16 port);
+  static task<TcpStream> connect(::sockaddr_in);
 };
 
 } // namespace evo::coro::net

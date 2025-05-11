@@ -11,6 +11,7 @@
 #include "evo/debug"
 #include <utility>
 #include "evo/coroutine/driver"
+#include "fmt/core.h"
 
 namespace evo::coro {
 
@@ -43,12 +44,14 @@ public:
   ~Fd() {
     if (counter_ && --(*counter_) == 0) {
       delete counter_;
+      counter_ = nullptr;
       DEBUG_ASSERT(raw_fd_ != -1, "");
 
       GLOBAL_DRIVER.with([this](auto& driver) {
         driver.deregister_fd(this->raw_fd_);
       });
 
+      printf("close fd %d\n", raw_fd_);
       if (::close(raw_fd_) == -1) {
         FATAL("");
       }

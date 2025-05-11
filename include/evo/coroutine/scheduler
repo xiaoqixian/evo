@@ -5,22 +5,26 @@
 
 #pragma once
 
-#include <coroutine>
 #include "evo/coroutine/context"
+#include "evo/coroutine/raw_task"
+#include "evo/debug"
 
 namespace evo::coro {
 
 class LocalScheduler {
+  using task_t = RawTask;
 public:
-  void schedule(std::coroutine_handle<> h) {
-    GLOBAL_CONTEXT.with([h](auto& ctx) {
-      ctx.push(h);
+  void schedule(task_t task) {
+    LOG_TRACE("LocalScheduler schedule a task");
+    GLOBAL_CONTEXT.with([task = std::move(task)](auto& ctx) {
+      ctx.push(std::move(task));
     });
   }
 
-  void yield_now(std::coroutine_handle<> h) {
-    GLOBAL_CONTEXT.with([h](auto& ctx) {
-      ctx.push_front(h);
+  void yield_now(task_t task) {
+    LOG_TRACE("LocalScheduler yield a task");
+    GLOBAL_CONTEXT.with([task](auto& ctx) {
+      ctx.push_front(task);
     });
   }
 };

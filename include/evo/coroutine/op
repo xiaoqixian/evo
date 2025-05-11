@@ -5,57 +5,84 @@
 
 #include "evo/coroutine/driver"
 #include "evo/coroutine/io_scheduler"
-#include "evo/coroutine/net/tcp/accept"
 #include "evo/coroutine/utilities"
-#include "evo/debug"
 #include <cerrno>
 #include <concepts>
 #include <coroutine>
 #include <cstring>
+#include <optional>
 #include <tuple>
+#include <type_traits>
+#include "evo/coroutine/io_ops"
+#include "evo/coroutine/raw_task"
+#include "evo/debug"
 
 namespace evo::coro {
 
-namespace __op_detail {
-
-template <typename Op>
-concept OpAble = requires (Op op) {
-  {op.interest()} -> std::same_as<std::tuple<int, IODirection>>;
-  {op.invoke()} -> std::same_as<int>;
-
-  typename Op::return_type;
-};
-
-} // namespace op_detail
-
-template <__op_detail::OpAble O>
-class OpAwaiter {
+template <OpAble O>
+class OpAwaiter: public TaskScheme {
   O op_;
-  using Ret = O::return_type;
-  Ret ret_;
+
+  using ready_t = decltype(std::declval<O>().invoke());
+  using Ret = typename ready_t::value_type;
+  std::optional<Ret> ret_opt_;
+  
+  using handle_t = std::coroutine_handle<>;
+  handle_t handle_ {nullptr};
 
 public:
   OpAwaiter(O op): op_(op) {}
+
+  void run() override {
+    auto res = GLOBAL_DRIVER.ref().poll(op_, this);
+
+    if (res.is_ready()) {
+      ret_opt_.emplace(std::move(res.value()));
+      res.reset();
+      DEBUG_ASSERT(!handle_.done(), "");
+      handle_.resume();
+    }
+  }
 
   bool await_ready() {
     return false;
   }
 
   bool await_suspend(std::coroutine_handle<> h) {
-    return GLOBAL_DRIVER.with([this, h](auto& driver) {
-      return driver.check_ready(this->op_, h);
-    });
+    handle_ = h;
+
+    auto res = GLOBAL_DRIVER.ref().poll(op_, this);
+    if (!res.is_ready()) {
+      return true;
+    } else {
+      ret_opt_.emplace(std::move(res.value()));
+      res.reset();
+      return false;
+    }
   }
 
   Ret await_resume() noexcept {
-    return op_.invoke();
+    DEBUG_ASSERT(ret_opt_.has_value(), "");
+    return std::move(ret_opt_.value());
   }
 };
 
 class Op {
 public:
-  static OpAwaiter<net::Accept> accept(Fd const& fd) {
-    return OpAwaiter(net::Accept(fd));
+  inline static OpAwaiter<ops::Read> read(int fd, void* buf, size_t size) {
+    return OpAwaiter(ops::Read(fd, buf, size));
+  }
+
+  inline static OpAwaiter<ops::Write> write(int fd, void const* buf, size_t size) {
+    return OpAwaiter(ops::Write(fd, buf, size));
+  }
+
+  inline static OpAwaiter<ops::net::Accept> accept(int fd) {
+    return OpAwaiter(ops::net::Accept(fd));
+  }
+
+  inline static OpAwaiter<ops::net::Connect> connect(int fd, ::sockaddr* addr) {
+    return OpAwaiter(ops::net::Connect(fd, addr));
   }
 };
 

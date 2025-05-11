@@ -1,0 +1,119 @@
+// -*- C++ -*-
+// Date:   Wed May 07 16:40:54 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include <sys/socket.h>
+#include "evo/coroutine/exceptions"
+#include "evo/types"
+#include "evo/coroutine/utilities"
+#include "evo/coroutine/io_scheduler"
+
+namespace evo::coro::ops {
+
+using OpRet = UnixIOException;
+
+static auto unix_errno_to_result(int res) -> Ready<OpRet> {
+  if (res < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      return Ready<OpRet>::not_ready();
+    } else {
+      return Ready<OpRet>::ready(OpRet::err(errno));
+    }
+  } else {
+    return Ready<OpRet>::ready(OpRet::ok(res));
+  }
+}
+
+class Read {
+  int fd_;
+  void* buf_;
+  size_t size_;
+public:
+  Read(int fd, void* buf, size_t size)
+    : fd_(fd),
+      buf_(buf),
+      size_(size)
+  {}
+
+  using return_type = OpRet;
+  inline auto interest() -> std::tuple<int, IODirection> {
+    return std::make_tuple(fd_, IODirection::read());
+  }
+
+  inline auto invoke() -> Ready<OpRet> {
+    return unix_errno_to_result(::read(fd_, buf_, size_));
+  }
+};
+
+class Write {
+  int fd_;
+  void const* buf_;
+  size_t size_;
+public:
+  Write(int fd, void const* buf, size_t size)
+    : fd_(fd),
+      buf_(buf),
+      size_(size)
+  {}
+
+  using return_type = OpRet;
+
+  inline auto interest() -> std::tuple<int, IODirection> {
+    return std::make_tuple(fd_, IODirection::read());
+  }
+
+  inline auto invoke() -> Ready<OpRet> {
+    return unix_errno_to_result(::write(fd_, buf_, size_));
+  }
+};
+
+namespace net {
+
+class Accept {
+  int fd_;
+public:
+  Accept(int fd): fd_(fd) {}
+
+  using return_type = OpRet;
+
+  inline auto interest() -> std::tuple<int, IODirection> {
+    return std::make_tuple(fd_, IODirection::read());
+  }
+
+  inline auto invoke() -> Ready<OpRet> {
+    return unix_errno_to_result(::accept(fd_, nullptr, nullptr));
+  }
+};
+
+class Connect {
+  int fd_;
+  ::sockaddr* addr_;
+public:
+  Connect(int fd, ::sockaddr* addr): fd_(fd), addr_(addr) {}
+
+  using return_type = OpRet;
+
+  inline auto interest() -> std::tuple<int, IODirection> {
+    return std::make_tuple(fd_, IODirection::write());
+  }
+
+  inline auto invoke() -> Ready<OpRet> {
+    int res = ::connect(fd_, addr_, sizeof(::sockaddr));
+    if (res < 0) {
+      if (errno == EINPROGRESS) {
+        return Ready<OpRet>::not_ready();
+      } else {
+        return Ready<OpRet>::ready(OpRet::err(errno));
+      }
+    } else {
+      return Ready<OpRet>::ready(OpRet::ok(res));
+    }
+  }
+};
+
+} // namespace net
+
+} // namespace evo::coro

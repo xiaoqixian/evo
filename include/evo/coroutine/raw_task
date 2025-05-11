@@ -1,0 +1,28 @@
+// -*- C++ -*-
+// Date:   Sat May 10 20:42:47 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+namespace evo::coro {
+
+class RawTask;
+
+class TaskScheme {
+public:
+  virtual void run() = 0;
+};
+
+class RawTask {
+  TaskScheme* task_ {nullptr};
+
+public:
+  RawTask(TaskScheme* task) noexcept: task_(task) {}
+
+  inline void run() {
+    task_->run();
+  }
+};
+
+} // namespace evo::coro

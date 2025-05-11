@@ -12,12 +12,16 @@ void Runtime::block_on(std::coroutine_handle<> h) {
   GLOBAL_CONTEXT.set(&ctx_);
   GLOBAL_DRIVER.set(driver_.get());
 
-  while (!h.done()) {
+  h.resume();
+
+  while (true) {
     while (!ctx_.tasks_.empty()) {
       auto task = std::move(ctx_.tasks_.front());
       ctx_.tasks_.pop_front();
-      task.resume();
+      task.run();
     }
+
+    if (h.done()) return;
 
     driver_->park(-1);
   }
