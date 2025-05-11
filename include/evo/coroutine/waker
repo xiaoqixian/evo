@@ -5,9 +5,6 @@
 
 #pragma once
 
-#include "evo/macros"
-#include <coroutine>
-#include <utility>
 #include "evo/coroutine/scheduler"
 #include "evo/coroutine/raw_task"
 
@@ -17,7 +14,7 @@ class Waker {
   RawTask task_;
   LocalScheduler scheduler_;
 public:
-  explicit Waker(void* task) noexcept: task_(static_cast<TaskScheme*>(task)) {}
+  explicit Waker(TaskScheme* task) noexcept: task_(task) {}
 
   inline void wake() {
     scheduler_.schedule(task_);

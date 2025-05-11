@@ -1,0 +1,153 @@
+// -*- C++ -*-
+// Date:   Sun May 11 16:35:32 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include "evo/types"
+#include <utility>
+#include <vector>
+
+namespace evo {
+
+namespace {
+
+struct empty_node_tag {};
+
+static constexpr int NO_POINT = -1;
+static constexpr int INVALID_POINT = -2;
+
+template <typename T>
+struct node {
+  using value_type = T;
+
+  int next_;
+  union {
+    value_type value_;
+  };
+
+  node(empty_node_tag, int next) noexcept;
+
+  template <typename... Args>
+  node(Args&&...) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+    requires std::is_constructible_v<T, Args...>;
+
+  node(node const&) noexcept(std::is_nothrow_copy_constructible_v<T>)
+    requires std::is_copy_constructible_v<T>;
+
+  node(node &&) noexcept(std::is_nothrow_move_constructible_v<T>)
+    requires std::is_move_constructible_v<T>;
+
+  ~node();
+
+  void reset(int next) noexcept(std::is_nothrow_destructible_v<T>);
+};
+
+template <typename T>
+node<T>::node(empty_node_tag, int next) noexcept
+  : next_(next)
+{}
+
+template <typename T>
+template <typename... Args>
+node<T>::node(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+  requires std::is_constructible_v<T, Args...>
+  : next_(NO_POINT)
+{
+  new (&value_) T(std::forward<Args>(args)...);
+}
+
+template <typename T>
+node<T>::node(node const& other) noexcept(std::is_nothrow_copy_constructible_v<T>)
+  requires std::is_copy_constructible_v<T>
+  : next_(other.next_)
+{
+  if (next_ == NO_POINT) {
+    new (&value_) T(other.value_);
+  }
+}
+
+template <typename T>
+node<T>::node(node && other) noexcept(std::is_nothrow_move_constructible_v<T>)
+  requires std::is_move_constructible_v<T>
+  : next_(other.next_)
+{
+  if (next_ == NO_POINT) {
+    new (&value_) T(std::move(other.value_));
+  }
+}
+
+template <typename T>
+node<T>::~node() {
+  if (next_ == NO_POINT) {
+    value_.~T();
+  }
+}
+
+}
+
+template <typename T>
+class slab {
+  using value_type = T;
+  using node_t = node<value_type>;
+
+  std::vector<node_t> slots_;
+  int next_slot_ {NO_POINT};
+
+public:
+  using token_type = u32;
+  
+  slab() noexcept = default;
+
+  slab(size_t size);
+
+  template <typename... Args>
+  token_type emplace(Args&&...) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+    requires std::is_constructible_v<T, Args...>;
+
+  void erase(token_type);
+};
+
+template <typename T>
+slab<T>::slab(size_t size) {
+  slots_.reserve(size);
+  for (size_t i = 0; i < size-1; i++) {
+    slots_.emplace_back(node_t(empty_node_tag {}, i + 1));
+  }
+  slots_.emplace_back(node_t(empty_node_tag {}, INVALID_POINT));
+  next_slot_ = 0;
+}
+
+template <typename T>
+template <typename... Args>
+slab<T>::token_type slab<T>::emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+  requires std::is_constructible_v<T, Args...>
+{
+  if (next_slot_ == NO_POINT) {
+    slots_.emplace_back(std::forward<Args>(args)...);
+    return slots_.size() - 1;
+  }
+
+  token_type res = next_slot_;
+  auto& nd = slots_[next_slot_];
+  next_slot_ = std::exchange(nd.next_, NO_POINT);
+  if (next_slot_ == INVALID_POINT) {
+    next_slot_ = NO_POINT;
+  }
+
+  nd.emplace(std::forward<Args>(args)...);
+  return res;
+}
+
+template <typename T>
+void slab<T>::erase(slab<T>::token_type token) {
+  auto next = next_slot_;
+  if (next == NO_POINT) {
+    next = INVALID_POINT;
+  }
+  slots_[token].reset(next);
+  next_slot_ = token;
+}
+
+} // namespace evo

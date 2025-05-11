@@ -62,7 +62,7 @@ public:
   void deregister_fd(int);
 
   template <typename O, typename Ret = typename O::return_type>
-  Ready<Ret> poll(O& op, void* task);
+  Ready<Ret> poll(O& op, TaskScheme* task);
 };
 
 extern thread_local ThreadLocalWrapper<Driver> GLOBAL_DRIVER;
@@ -73,37 +73,22 @@ class EpollDriver: public Driver {
 public:
   EpollDriver();
 
-  template <typename O>
-  bool check_ready(O& op, void* task);
-
   void park(int);
 
   void register_fd(int);
   void deregister_fd(int);
 
   template <typename O, typename Ret = typename O::return_type>
-  Ready<Ret> poll(O& op, void* task);
+  Ready<Ret> poll(O& op, TaskScheme* task);
 };
 
-template <typename O>
-bool Driver::check_ready(O& op, std::coroutine_handle<> h) {
-  DRIVER_PROXY(check_ready, op, h);
-}
-
 template <typename O, typename Ret>
-Ready<Ret> Driver::poll(O& op, void* task) {
+Ready<Ret> Driver::poll(O& op, TaskScheme* task) {
   DRIVER_PROXY(poll, op, task);
 }
 
-template <typename O>
-bool EpollDriver::check_ready(O& op, void* task) {
-  auto const [idx, direction] = op.interest();
-  DEBUG_ASSERT(io_dispatch_.contains(idx), "");
-  return io_dispatch_[idx].check_ready(direction, Waker(task));
-}
-
 template <typename O, typename Ret>
-Ready<Ret> EpollDriver::poll(O& op, void* task) {
+Ready<Ret> EpollDriver::poll(O& op, TaskScheme* task) {
   auto const [idx, direction] = op.interest();
   DEBUG_ASSERT(io_dispatch_.contains(idx), "");
 
