@@ -7,6 +7,7 @@
 
 #include "evo/types"
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace evo {
@@ -15,77 +16,66 @@ namespace {
 
 struct empty_node_tag {};
 
-static constexpr int NO_POINT = -1;
-static constexpr int INVALID_POINT = -2;
-
 template <typename T>
 struct node {
   using value_type = T;
+  using Var = std::variant<size_t, value_type>;
 
-  int next_;
-  union {
-    value_type value_;
-  };
+  Var data_;
 
-  node(empty_node_tag, int next) noexcept;
+  node(empty_node_tag, int next) noexcept
+    : data_(Var(std::in_place_index<0>, next))
+  {}
 
   template <typename... Args>
-  node(Args&&...) noexcept(std::is_nothrow_constructible_v<T, Args...>)
-    requires std::is_constructible_v<T, Args...>;
+  node(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+    requires std::is_constructible_v<T, Args...>
+    : data_(Var(std::in_place_index<1>, std::forward<Args>(args)...))
+  {}
 
   node(node const&) noexcept(std::is_nothrow_copy_constructible_v<T>)
-    requires std::is_copy_constructible_v<T>;
+    requires std::is_copy_constructible_v<T> = default;
 
   node(node &&) noexcept(std::is_nothrow_move_constructible_v<T>)
-    requires std::is_move_constructible_v<T>;
-
-  ~node();
+    requires std::is_move_constructible_v<T> = default;
 
   void reset(int next) noexcept(std::is_nothrow_destructible_v<T>);
+
+  template <typename... Args>
+  void emplace(Args&&...) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+    requires std::is_constructible_v<T, Args...>;
+
+
+  bool empty() const noexcept {
+    return data_.index() == 0;
+  }
+
+  size_t next() const noexcept {
+    return std::get<0>(data_);
+  }
+
+  T& value() noexcept {
+    return std::get<1>(data_);
+  }
 };
 
 template <typename T>
-node<T>::node(empty_node_tag, int next) noexcept
-  : next_(next)
-{}
+void node<T>::reset(int next) 
+  noexcept(std::is_nothrow_destructible_v<T>)
+{
+  data_.template emplace<0>(next);
+}
 
 template <typename T>
 template <typename... Args>
-node<T>::node(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+void node<T>::emplace(Args&&... args) 
+  noexcept(std::is_nothrow_constructible_v<T, Args...>)
   requires std::is_constructible_v<T, Args...>
-  : next_(NO_POINT)
 {
-  new (&value_) T(std::forward<Args>(args)...);
+  data_.template emplace<1>(T(std::forward<Args>(args)...));
 }
 
-template <typename T>
-node<T>::node(node const& other) noexcept(std::is_nothrow_copy_constructible_v<T>)
-  requires std::is_copy_constructible_v<T>
-  : next_(other.next_)
-{
-  if (next_ == NO_POINT) {
-    new (&value_) T(other.value_);
-  }
-}
-
-template <typename T>
-node<T>::node(node && other) noexcept(std::is_nothrow_move_constructible_v<T>)
-  requires std::is_move_constructible_v<T>
-  : next_(other.next_)
-{
-  if (next_ == NO_POINT) {
-    new (&value_) T(std::move(other.value_));
-  }
-}
-
-template <typename T>
-node<T>::~node() {
-  if (next_ == NO_POINT) {
-    value_.~T();
-  }
-}
-
-}
+} // anonymous namespace
 
 template <typename T>
 class slab {
@@ -93,61 +83,60 @@ class slab {
   using node_t = node<value_type>;
 
   std::vector<node_t> slots_;
-  int next_slot_ {NO_POINT};
+  size_t next_ {0};
+  size_t size_ {0};
 
 public:
-  using token_type = u32;
+  using key_type = u32;
   
   slab() noexcept = default;
 
   slab(size_t size);
 
   template <typename... Args>
-  token_type emplace(Args&&...) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+  key_type emplace(Args&&...) 
+    noexcept(std::is_nothrow_constructible_v<T, Args...>)
     requires std::is_constructible_v<T, Args...>;
 
-  void erase(token_type);
+  void erase(key_type);
+
+  T& get(key_type key);
+
+  T& operator[](key_type key) { return get(key); }
 };
 
 template <typename T>
 slab<T>::slab(size_t size) {
   slots_.reserve(size);
-  for (size_t i = 0; i < size-1; i++) {
-    slots_.emplace_back(node_t(empty_node_tag {}, i + 1));
-  }
-  slots_.emplace_back(node_t(empty_node_tag {}, INVALID_POINT));
-  next_slot_ = 0;
 }
 
 template <typename T>
 template <typename... Args>
-slab<T>::token_type slab<T>::emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+slab<T>::key_type slab<T>::emplace(Args&&... args) 
+  noexcept(std::is_nothrow_constructible_v<T, Args...>)
   requires std::is_constructible_v<T, Args...>
 {
-  if (next_slot_ == NO_POINT) {
+  auto key = next_;
+  if (next_ == slots_.size()) {
     slots_.emplace_back(std::forward<Args>(args)...);
-    return slots_.size() - 1;
+    next_++;
+  } else {
+    next_ = slots_[key].next();
+    slots_[key].emplace(std::forward<Args>(args)...);
   }
 
-  token_type res = next_slot_;
-  auto& nd = slots_[next_slot_];
-  next_slot_ = std::exchange(nd.next_, NO_POINT);
-  if (next_slot_ == INVALID_POINT) {
-    next_slot_ = NO_POINT;
-  }
-
-  nd.emplace(std::forward<Args>(args)...);
-  return res;
+  return key;
 }
 
 template <typename T>
-void slab<T>::erase(slab<T>::token_type token) {
-  auto next = next_slot_;
-  if (next == NO_POINT) {
-    next = INVALID_POINT;
-  }
-  slots_[token].reset(next);
-  next_slot_ = token;
+void slab<T>::erase(key_type key) {
+  slots_[key].reset(next_);
+  next_ = key;
+}
+
+template <typename T>
+T& slab<T>::get(key_type key) {
+  return slots_[key].value();
 }
 
 } // namespace evo
