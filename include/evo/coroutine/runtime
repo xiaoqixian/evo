@@ -6,23 +6,68 @@
 #pragma once
 
 #include "evo/coroutine/driver"
-#include "evo/coroutine/utilities"
 #include "evo/coroutine/context"
+#include "evo/coroutine/concepts"
+#include "evo/debug"
+#include "evo/coroutine/task"
 #include <coroutine>
+#include <optional>
+#include <type_traits>
 
 namespace evo::coro {
+
+using evo::concepts::PromiseWithContinuation;
 
 class Runtime;
 
 struct EpollDriverTag {};
 
-class Runtime {
+template <typename A>
+class JoinHandle {
+  A awaiter_;
+
+public:
+  JoinHandle(A awaiter) noexcept(std::is_nothrow_move_constructible_v<A>)
+    : awaiter_(std::move(awaiter)) {}
+
+  A operator co_await() noexcept {
+    return std::move(awaiter_);
+  }
+};
+
+class RuntimeImpl {
+  friend class Runtime;
+
   Context ctx_;
   std::unique_ptr<Driver> driver_;
 public:
-  Runtime(EpollDriverTag): driver_(std::make_unique<EpollDriver>()) {}
+  RuntimeImpl(EpollDriverTag): driver_(std::make_unique<EpollDriver>()) {}
 
   void block_on(std::coroutine_handle<>);
+
+  template <typename R>
+  JoinHandle<typename task<R>::awaiter> spawn(task<R> task) {
+    auto handle = JoinHandle(task.operator co_await());
+    GLOBAL_CONTEXT.ref().push(HandleTask(task.handle()));
+    return handle;
+  }
+};
+
+class Runtime {
+  static thread_local std::unique_ptr<RuntimeImpl> thread_runtime;
+public:
+  static void init() {
+    thread_runtime = std::make_unique<RuntimeImpl>(EpollDriverTag {});
+    GLOBAL_CONTEXT.set(&thread_runtime->ctx_);
+    GLOBAL_DRIVER.set(thread_runtime->driver_.get());
+  }
+
+  static void block_on(std::coroutine_handle<> h);
+
+  template <typename R>
+  inline static JoinHandle<typename task<R>::awaiter> spawn(task<R> task) {
+    return thread_runtime->spawn(std::move(task));
+  }
 };
 
 } // namespace evo::coro

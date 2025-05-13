@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <coroutine>
+
 namespace evo::coro {
 
 class RawTask;
@@ -22,6 +24,16 @@ public:
 
   inline void run() {
     task_->run();
+  }
+};
+
+class HandleTask: public TaskScheme {
+  std::coroutine_handle<> handle_;
+public:
+  HandleTask(std::coroutine_handle<> h) noexcept: handle_(h) {}
+
+  void run() override {
+    if (handle_ != nullptr && !handle_.done()) handle_.resume();
   }
 };
 

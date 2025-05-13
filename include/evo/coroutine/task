@@ -102,8 +102,8 @@ public:
     }
   }
 
-  struct awaiter_base {
-    awaiter_base(handle_t h) noexcept: handle_(h) {}
+  struct awaiter {
+    awaiter(handle_t h) noexcept: handle_(h) {}
 
     inline bool await_ready() const noexcept {
       return false;
@@ -114,24 +114,18 @@ public:
       handle_.promise().set_continuation(continuation);
       return handle_;
     }
+
+    Ret await_resume() const noexcept {
+      if constexpr (!std::is_void_v<Ret>) {
+        return handle_.promise().result();
+      }
+    }
   protected:
     handle_t handle_;
   };
 
-  template <typename R = Ret>
-  struct awaiter: public awaiter_base {
-    auto await_resume() const noexcept {
-      return awaiter_base::handle_.promise().result();
-    }
-  };
-
-  template <>
-  struct awaiter<void>: public awaiter_base {
-    auto await_resume() const noexcept {}
-  };
-
   auto operator co_await() noexcept {
-    return awaiter<>(handle_);
+    return awaiter(handle_);
   }
 
   auto handle() const noexcept {

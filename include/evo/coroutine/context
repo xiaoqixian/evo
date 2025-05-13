@@ -13,18 +13,18 @@
 namespace evo::coro {
 
 class Context {
-  friend class Runtime;
+  friend class RuntimeImpl;
   using task_t = RawTask;
   std::deque<task_t> tasks_;
 public:
   template <typename T>
   inline void push(T&& task) {
-    tasks_.emplace_back(task);
+    tasks_.emplace_back(std::forward<T>(task));
   }
 
   template <typename T>
   inline void push_front(T&& task) {
-    tasks_.emplace_front(task);
+    tasks_.emplace_front(std::forward<T>(task));
   }
 };
 

@@ -71,8 +71,16 @@ concept awaitable = true;
 // concept awaitable = requires { typename A::promise_type; }
 //   && ( has_co_await_op<A> || awaiter<A>);
 
-} // namespace concepts
 
+/**
+ * Promise type that has the method set_continuation
+ */
+template <typename P>
+concept PromiseWithContinuation = requires (P p, std::coroutine_handle<> h) {
+  p.set_continuation(h);
+};
+
+} // namespace concepts
 } // namespace evo
 
 #endif // _CONCEPTS_HPP

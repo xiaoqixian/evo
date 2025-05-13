@@ -15,53 +15,39 @@
 using evo::u8;
 using namespace evo::coro;
 
+task<> handler(net::TcpStream stream) {
+  char buf[1024] {};
+  int rb = co_await stream.read(buf, 1024);
+  printf("Cli send: %s\n", buf);
+  const char* resp = "Server hello";
+  co_await stream.write(resp, std::strlen(resp));
+}
+
 task<> server() {
   auto listener = net::TcpListener::bind(9900);
   fmt::println("TCP listener created");
 
-  while (true) {
-    auto stream = co_await listener.accept();
-    fmt::println("Accept a connection");
-    char buf[1024] {};
-    int rb = co_await stream.read(buf, 1024);
-    printf("Cli send: %s\n", buf);
-    const char* resp = "Server hello";
-    co_await stream.write(resp, std::strlen(resp));
-  }
+  auto stream = co_await listener.accept();
+  fmt::println("Stream accepted");
+
+  auto handle = Runtime::spawn(handler(std::move(stream)));
+  fmt::println("handler spawn");
+  co_await handle;
+  fmt::println("handler joined");
+  // while (true) {
+  //   auto stream = co_await listener.accept();
+  //   fmt::println("Accept a connection");
+  //   char buf[1024] {};
+  //   int rb = co_await stream.read(buf, 1024);
+  //   printf("Cli send: %s\n", buf);
+  //   const char* resp = "Server hello";
+  //   co_await stream.write(resp, std::strlen(resp));
+  // }
 }
 
 int main() {
-  // int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  // if (server_fd == -1) {
-  //     perror("socket");
-  //     return 1;
-  // }
+  Runtime::init();
   //
-  // sockaddr_in addr{};
-  // addr.sin_family = AF_INET;
-  // addr.sin_port = htons(9900);
-  // addr.sin_addr.s_addr = INADDR_ANY;
-  //
-  // // 绑定地址
-  // if (bind(server_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1) {
-  //     perror("bind");
-  //     close(server_fd);
-  //     return 1;
-  // }
-  //
-  // // 监听端口
-  // if (listen(server_fd, 5) == -1) {
-  //     perror("listen");
-  //     close(server_fd);
-  //     return 1;
-  // }
-  //
-  // while (true) {
-  //   int res = accept(server_fd, nullptr, nullptr);
-  //   printf("accept one %d\n", res);
-  // }
-  auto runtime = Runtime(EpollDriverTag {});
-
-  auto srv = server();
-  runtime.block_on(srv.handle());
+  // auto srv = server();
+  // Runtime::block_on(srv.handle());
 }

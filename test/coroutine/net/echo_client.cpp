@@ -24,6 +24,6 @@ task<> client() {
 }
 
 int main() {
-  auto runtime = Runtime(EpollDriverTag {});
-  runtime.block_on(client().handle());
+  Runtime::init();
+  Runtime::block_on(client().handle());
 }

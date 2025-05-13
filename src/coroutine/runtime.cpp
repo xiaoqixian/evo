@@ -6,11 +6,8 @@
 
 namespace evo::coro {
 
-void Runtime::block_on(std::coroutine_handle<> h) {
+void RuntimeImpl::block_on(std::coroutine_handle<> h) {
   if (h.done()) return;
-
-  GLOBAL_CONTEXT.set(&ctx_);
-  GLOBAL_DRIVER.set(driver_.get());
 
   h.resume();
 
@@ -25,6 +22,12 @@ void Runtime::block_on(std::coroutine_handle<> h) {
 
     driver_->park(-1);
   }
+}
+
+thread_local std::unique_ptr<RuntimeImpl> Runtime::thread_runtime;
+
+void Runtime::block_on(std::coroutine_handle<> h) {
+  thread_runtime->block_on(h);
 }
 
 } // namespace evo::coro
