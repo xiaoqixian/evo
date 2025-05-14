@@ -62,7 +62,7 @@ public:
   void deregister_fd(int);
 
   template <typename O, typename Ret = typename O::return_type>
-  Ready<Ret> poll(O& op, TaskScheme* task);
+  Ready<Ret> poll(O& op, RawTask task);
 };
 
 extern thread_local ThreadLocalWrapper<Driver> GLOBAL_DRIVER;
@@ -79,16 +79,16 @@ public:
   void deregister_fd(int);
 
   template <typename O, typename Ret = typename O::return_type>
-  Ready<Ret> poll(O& op, TaskScheme* task);
+  Ready<Ret> poll(O& op, RawTask task);
 };
 
 template <typename O, typename Ret>
-Ready<Ret> Driver::poll(O& op, TaskScheme* task) {
+Ready<Ret> Driver::poll(O& op, RawTask task) {
   DRIVER_PROXY(poll, op, task);
 }
 
 template <typename O, typename Ret>
-Ready<Ret> EpollDriver::poll(O& op, TaskScheme* task) {
+Ready<Ret> EpollDriver::poll(O& op, RawTask task) {
   auto const [idx, direction] = op.interest();
   DEBUG_ASSERT(io_dispatch_.contains(idx), "");
 

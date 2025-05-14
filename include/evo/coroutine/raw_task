@@ -5,35 +5,19 @@
 
 #pragma once
 
-#include <coroutine>
-
 namespace evo::coro {
 
-class RawTask;
-
-class TaskScheme {
-public:
-  virtual void run() = 0;
-};
-
 class RawTask {
-  TaskScheme* task_ {nullptr};
+  void* data_ {nullptr};
+
+  using Fp = void(*)(void*);
+  Fp run_;
 
 public:
-  RawTask(TaskScheme* task) noexcept: task_(task) {}
+  RawTask(void* data, Fp run) noexcept: data_(data), run_(run) {}
 
   inline void run() {
-    task_->run();
-  }
-};
-
-class HandleTask: public TaskScheme {
-  std::coroutine_handle<> handle_;
-public:
-  HandleTask(std::coroutine_handle<> h) noexcept: handle_(h) {}
-
-  void run() override {
-    if (handle_ != nullptr && !handle_.done()) handle_.resume();
+    (*run_)(data_);
   }
 };
 

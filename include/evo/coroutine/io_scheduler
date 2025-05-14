@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <functional>
 #include <optional>
 #include <sys/epoll.h>
 #include "evo/types"

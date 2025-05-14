@@ -8,6 +8,7 @@
 #include <coroutine>
 #include <utility>
 #include "evo/coroutine/promise_base"
+#include <fmt/format.h>
 
 namespace evo::coro {
 

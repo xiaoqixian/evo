@@ -14,7 +14,7 @@
 namespace evo::coro {
 
 template <OpAble O>
-class OpAwaiter: public TaskScheme {
+class OpAwaiter {
   O op_;
 
   using ready_t = decltype(std::declval<O>().invoke());
@@ -27,14 +27,15 @@ class OpAwaiter: public TaskScheme {
 public:
   OpAwaiter(O op): op_(op) {}
 
-  void run() override {
-    auto res = GLOBAL_DRIVER.ref().poll(op_, this);
+  static void run(void* data) {
+    auto* self = static_cast<OpAwaiter<O>*>(data);
+    auto res = GLOBAL_DRIVER.ref().poll(self->op_, RawTask(data, &run));
 
     if (res.is_ready()) {
-      ret_opt_.emplace(std::move(res.value()));
+      self->ret_opt_.emplace(std::move(res.value()));
       res.reset();
-      DEBUG_ASSERT(!handle_.done(), "");
-      handle_.resume();
+      DEBUG_ASSERT(!self->handle_.done(), "");
+      self->handle_.resume();
     }
   }
 
@@ -45,7 +46,7 @@ public:
   bool await_suspend(std::coroutine_handle<> h) {
     handle_ = h;
 
-    auto res = GLOBAL_DRIVER.ref().poll(op_, this);
+    auto res = GLOBAL_DRIVER.ref().poll(op_, RawTask(this, &run));
     if (!res.is_ready()) {
       return true;
     } else {

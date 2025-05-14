@@ -16,11 +16,13 @@ using evo::u8;
 using namespace evo::coro;
 
 task<> handler(net::TcpStream stream) {
+  fmt::println("handler start");
   char buf[1024] {};
   int rb = co_await stream.read(buf, 1024);
   printf("Cli send: %s\n", buf);
   const char* resp = "Server hello";
   co_await stream.write(resp, std::strlen(resp));
+  fmt::println("handler return");
 }
 
 task<> server() {
@@ -47,7 +49,7 @@ task<> server() {
 
 int main() {
   Runtime::init();
-  //
-  // auto srv = server();
-  // Runtime::block_on(srv.handle());
+
+  auto srv = server();
+  Runtime::block_on(srv.handle());
 }

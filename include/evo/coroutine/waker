@@ -14,7 +14,7 @@ class Waker {
   RawTask task_;
   LocalScheduler scheduler_;
 public:
-  explicit Waker(TaskScheme* task) noexcept: task_(task) {}
+  explicit Waker(RawTask task) noexcept: task_(task) {}
 
   inline void wake() {
     scheduler_.schedule(task_);

@@ -8,10 +8,8 @@
 #include "evo/coroutine/driver"
 #include "evo/coroutine/context"
 #include "evo/coroutine/concepts"
-#include "evo/debug"
 #include "evo/coroutine/task"
 #include <coroutine>
-#include <optional>
 #include <type_traits>
 
 namespace evo::coro {
@@ -22,16 +20,26 @@ class Runtime;
 
 struct EpollDriverTag {};
 
-template <typename A>
+template <typename R>
 class JoinHandle {
-  A awaiter_;
+  using handle_t = task<R>::handle_t;
+  handle_t handle_;
 
 public:
-  JoinHandle(A awaiter) noexcept(std::is_nothrow_move_constructible_v<A>)
-    : awaiter_(std::move(awaiter)) {}
+  JoinHandle(handle_t handle) noexcept: handle_(handle) {}
 
-  A operator co_await() noexcept {
-    return std::move(awaiter_);
+  bool await_ready() {
+    return handle_.done();
+  }
+
+  void await_suspend(std::coroutine_handle<> cont) {
+    handle_.promise().set_continuation(cont);
+  }
+
+  R await_resume() noexcept {
+    if constexpr (!std::is_void_v<R>) {
+      return std::move(handle_.promise().result());
+    }
   }
 };
 
@@ -45,11 +53,16 @@ public:
 
   void block_on(std::coroutine_handle<>);
 
+  static void resume_handle(void* data) {
+    auto handle = std::coroutine_handle<>::from_address(data);
+    if (!handle.done()) handle.resume();
+  }
+
   template <typename R>
-  JoinHandle<typename task<R>::awaiter> spawn(task<R> task) {
-    auto handle = JoinHandle(task.operator co_await());
-    GLOBAL_CONTEXT.ref().push(HandleTask(task.handle()));
-    return handle;
+  JoinHandle<R> spawn(task<R> task) {
+    auto join_handle = JoinHandle<R>(task.handle());
+    GLOBAL_CONTEXT.ref().push(RawTask(task.handle().address(), &resume_handle));
+    return join_handle;
   }
 };
 
@@ -65,7 +78,7 @@ public:
   static void block_on(std::coroutine_handle<> h);
 
   template <typename R>
-  inline static JoinHandle<typename task<R>::awaiter> spawn(task<R> task) {
+  inline static JoinHandle<R> spawn(task<R> task) {
     return thread_runtime->spawn(std::move(task));
   }
 };
