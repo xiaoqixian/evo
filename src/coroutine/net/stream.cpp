@@ -38,8 +38,6 @@ task<TcpStream> TcpStream::connect(::sockaddr_in addr) {
     SYS_ERROR(socket);
   }
 
-  printf("client fd = %d\n", sockfd);
-
   Fd fd(sockfd);
 
   auto res = co_await Op::connect(fd, reinterpret_cast<::sockaddr*>(&addr));

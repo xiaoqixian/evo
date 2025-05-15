@@ -23,16 +23,10 @@ TcpListener TcpListener::bind(u16 port) {
   addr.sin_addr.s_addr = ::htonl(INADDR_ANY);
   addr.sin_port = ::htons(port);
   
-  // int res = ::bind(fd, (sockaddr*)&addr, sizeof(addr));
-  // printf("bind res = %d\n", res);
   if (::bind(fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
     ERROR("Failed to bind port {}: {}", port, std::strerror(errno));
   }
 
-  printf("bind on fd %d\n", fd);
-
-  // res = ::listen(fd, BACKLOG);
-  // printf("listen res = %d\n", res);
   if (::listen(fd, BACKLOG) < 0) {
     SYS_ERROR(listen);
   }

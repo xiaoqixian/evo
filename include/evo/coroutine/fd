@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <unistd.h>
 #include "evo/types"
 #include <fcntl.h>
 #include "evo/macros"

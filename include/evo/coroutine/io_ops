@@ -6,6 +6,8 @@
 #pragma once
 
 #include <sys/socket.h>
+#include <unistd.h>
+#include <tuple>
 #include "evo/coroutine/exceptions"
 #include "evo/types"
 #include "evo/coroutine/utilities"
