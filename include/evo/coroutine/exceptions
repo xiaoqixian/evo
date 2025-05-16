@@ -9,13 +9,14 @@
 #include <cstring>
 namespace evo::coro {
 
-class UnixIOException: public Result<int, int> {
+template <typename T>
+class UnixIOResult: public Result<T, int> {
 public:
-  inline int unwrap_or_throw() {
-    if (is_err()) {
-      throw std::runtime_error(std::strerror(unchecked_unwrap_err()));
+  inline T unwrap_or_throw() {
+    if (this->is_err()) {
+      throw std::runtime_error(std::strerror(this->unchecked_unwrap_err()));
     } else {
-      return unchecked_unwrap();
+      return std::move(*this).unchecked_unwrap();
     }
   }
 };
