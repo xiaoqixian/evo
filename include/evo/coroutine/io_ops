@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <tuple>
+#include <fcntl.h>
 #include "evo/coroutine/exceptions"
 #include "evo/types"
 #include "evo/coroutine/utilities"
@@ -92,7 +93,7 @@ public:
   }
 
   inline auto invoke() -> Ready<OpRet> {
-    return unix_errno_to_result(::accept(fd_, nullptr, nullptr));
+    return unix_errno_to_result(::accept4(fd_, nullptr, nullptr, O_CLOEXEC | O_NONBLOCK));
   }
 };
 
