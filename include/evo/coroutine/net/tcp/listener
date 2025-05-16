@@ -21,7 +21,7 @@ namespace evo::coro::net {
 class TcpListener {
   Fd fd_;
 
-  static constexpr size_t BACKLOG = 128;
+  static constexpr size_t BACKLOG = 1024;
 public:
   TcpListener(int fd) noexcept: fd_(fd) {}
 
