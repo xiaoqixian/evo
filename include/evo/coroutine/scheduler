@@ -15,14 +15,14 @@ class LocalScheduler {
   using task_t = RawTask;
 public:
   void schedule(task_t task) {
-    LOG_TRACE("LocalScheduler schedule a task");
+    // LOG_TRACE("LocalScheduler schedule a task");
     GLOBAL_CONTEXT.with([task = std::move(task)](auto& ctx) {
       ctx.push(std::move(task));
     });
   }
 
   void yield_now(task_t task) {
-    LOG_TRACE("LocalScheduler yield a task");
+    // LOG_TRACE("LocalScheduler yield a task");
     GLOBAL_CONTEXT.with([task](auto& ctx) {
       ctx.push_front(task);
     });

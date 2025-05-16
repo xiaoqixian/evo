@@ -15,7 +15,7 @@
 
 namespace evo::coro::ops {
 
-using OpRet = UnixIOException;
+using OpRet = UnixIOResult<int>;
 
 static auto unix_errno_to_result(int res) -> Ready<OpRet> {
   if (res < 0) {
@@ -40,6 +40,8 @@ public:
       size_(size)
   {}
 
+  static constexpr const char* NAME = "read";
+
   using return_type = OpRet;
   inline auto interest() -> std::tuple<int, IODirection> {
     return std::make_tuple(fd_, IODirection::read());
@@ -61,6 +63,8 @@ public:
       size_(size)
   {}
 
+  static constexpr const char* NAME = "write";
+
   using return_type = OpRet;
 
   inline auto interest() -> std::tuple<int, IODirection> {
@@ -79,6 +83,8 @@ class Accept {
 public:
   Accept(int fd): fd_(fd) {}
 
+  static constexpr const char* NAME = "accept";
+
   using return_type = OpRet;
 
   inline auto interest() -> std::tuple<int, IODirection> {
@@ -95,6 +101,8 @@ class Connect {
   ::sockaddr* addr_;
 public:
   Connect(int fd, ::sockaddr* addr): fd_(fd), addr_(addr) {}
+
+  static constexpr const char* NAME = "connect";
 
   using return_type = OpRet;
 

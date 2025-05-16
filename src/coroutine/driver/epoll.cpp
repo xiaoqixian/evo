@@ -19,7 +19,9 @@ EpollDriver::EpollDriver()
 
 void EpollDriver::park(int timeout) {
   ::epoll_event events[1024];
+  LOG_TRACE("epoll_wait start");
   int res = ::epoll_wait(epfd_, events, 1024, timeout);
+  LOG_TRACE("epoll_wait end, res = {}", res);
   if (res == -1) {
     SYS_ERROR(epoll_wait);
   }

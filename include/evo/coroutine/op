@@ -29,9 +29,11 @@ public:
 
   static void run(void* data) {
     auto* self = static_cast<OpAwaiter<O>*>(data);
+    LOG_TRACE("check if op {} is ready", O::NAME);
     auto res = GLOBAL_DRIVER.ref().poll(self->op_, RawTask(data, &run));
 
     if (res.is_ready()) {
+      LOG_TRACE("op {} is ready, resume handle", O::NAME);
       self->ret_opt_.emplace(std::move(res.value()));
       res.reset();
       DEBUG_ASSERT(!self->handle_.done(), "");
