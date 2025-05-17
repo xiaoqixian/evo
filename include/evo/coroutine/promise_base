@@ -55,7 +55,7 @@ struct promise_base: public promise_base_impl::promise_base_base {
     return std::holds_alternative<std::exception_ptr>(this->storage);
   }
 
-  void return_value(value_type&& val) noexcept {
+  void return_value(value_type val) noexcept {
     if (!this->has_exception()) {
       if constexpr (value_type_is_ref) {
         this->storage.template emplace<opt_type>(
@@ -64,7 +64,7 @@ struct promise_base: public promise_base_impl::promise_base_base {
       } 
       else {
         this->storage.template emplace<opt_type>(
-          opt_type(std::forward<value_type>(val))
+          opt_type(std::move(val))
         );
       }
     }
@@ -90,7 +90,7 @@ struct promise_base: public promise_base_impl::promise_base_base {
       emplace<std::exception_ptr>(std::current_exception());
   }
 
-  auto result() & {
+  Ret take_result() {
     if (this->has_exception()) {
       std::rethrow_exception(
         std::get<std::exception_ptr>(this->storage));
@@ -99,36 +99,40 @@ struct promise_base: public promise_base_impl::promise_base_base {
       opt_type& hold = std::get<opt_type>(this->storage);
       if (hold.has_value()) {
         if constexpr (value_type_is_ref) {
-          return static_cast<value_type>(*hold.value());
+          Ret res = static_cast<value_type>(*hold.value());
+          hold.reset();
+          return res;
         } else {
-          return static_cast<value_type&>(hold.value());
+          Ret res = std::move(hold.value());
+          hold.reset();
+          return res;
         }
       }
       else {
-        throw std::runtime_error("coroutine value is never set");
+        throw std::runtime_error("coroutine value is never set or is taken");
       }
     }
   }
 
-  auto result() const& {
-    if (this->has_exception()) {
-      std::rethrow_exception(
-        std::get<std::exception_ptr>(this->storage));
-    }
-    else {
-      opt_type& hold = std::get<opt_type>(this->storage);
-      if (hold.has_value()) {
-        if constexpr (value_type_is_ref) {
-          return static_cast<std::remove_cvref_t<value_type> const&>(*hold.value());
-        } else {
-          return static_cast<value_type const&>(hold.value());
-        }
-      }
-      else {
-        throw std::runtime_error("coroutine value is never set");
-      }
-    }
-  }
+  // auto result() const& {
+  //   if (this->has_exception()) {
+  //     std::rethrow_exception(
+  //       std::get<std::exception_ptr>(this->storage));
+  //   }
+  //   else {
+  //     opt_type& hold = std::get<opt_type>(this->storage);
+  //     if (hold.has_value()) {
+  //       if constexpr (value_type_is_ref) {
+  //         return static_cast<std::remove_cvref_t<value_type> const&>(*hold.value());
+  //       } else {
+  //         return static_cast<value_type const&>(hold.value());
+  //       }
+  //     }
+  //     else {
+  //       throw std::runtime_error("coroutine value is never set");
+  //     }
+  //   }
+  // }
 private:
   std::variant<opt_type, std::exception_ptr> storage;
 };

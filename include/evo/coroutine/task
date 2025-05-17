@@ -8,6 +8,7 @@
 #include <coroutine>
 #include <utility>
 #include "evo/coroutine/promise_base"
+#include "evo/debug"
 #include <fmt/format.h>
 
 namespace evo::coro {
@@ -26,14 +27,23 @@ using task_promise_base = promise_base<Ret>;
 template <typename Ret>
 struct task_promise: task_promise_base<Ret> {
   std::coroutine_handle<> continuation_;
+  size_t ref_;
+
+  // task promise is born with 2 references, one is the coroutine itself,
+  // one is with the task.
+  // The coroutine one is released on final suspend
+  // The task one is released on destruction.
+  task_promise(): continuation_(nullptr), ref_(2) {}
 
   task<Ret> get_return_object() {
     return task<Ret>(std::coroutine_handle<task_promise<Ret>>::from_promise(*this));
   }
 
   struct final_awaiter {
+    // if no other join handle refer to this coroutine,
+    // the coroutine can be automatically destroyed.
     inline constexpr bool await_ready() const noexcept {
-      return false;
+      return promise_.dec_ref() == 0;
     }
 
     // technically, the typename P should be a type 
@@ -51,15 +61,29 @@ struct task_promise: task_promise_base<Ret> {
     }
 
     inline constexpr void await_resume() const noexcept {}
+
+    task_promise<Ret>& promise_;
   };
 
   // actually this is an override.
   auto final_suspend() noexcept {
-    return final_awaiter();
+    return final_awaiter {*this};
   }
 
   void set_continuation(std::coroutine_handle<> c) noexcept {
     continuation_ = c;
+  }
+
+  size_t ref() const {
+    return ref_;
+  }
+
+  size_t inc_ref() {
+    return ++ref_;
+  }
+
+  size_t dec_ref() {
+    return --ref_;
   }
 };
 
@@ -87,6 +111,13 @@ public:
       handle_ = std::exchange(other.handle_, nullptr);
     }
     return *this;
+  }
+
+  ~task() {
+    if (handle_ && handle_.promise().dec_ref() == 0) {
+      DEBUG_ASSERT(handle_.done(), "");
+      handle_.destroy();
+    }
   }
 
   inline bool is_ready() const noexcept {
@@ -118,7 +149,7 @@ public:
 
     Ret await_resume() const noexcept {
       if constexpr (!std::is_void_v<Ret>) {
-        return handle_.promise().result();
+        return handle_.promise().take_result();
       }
     }
   protected:
@@ -131,6 +162,10 @@ public:
 
   auto handle() const noexcept {
     return handle_;
+  }
+
+  auto take_handle() const noexcept {
+    return std::exchange(handle_, nullptr);
   }
 private:
   handle_t handle_;
