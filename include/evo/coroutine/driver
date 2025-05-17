@@ -90,7 +90,7 @@ Ready<Ret> Driver::poll(O& op, RawTask task) {
 template <typename O, typename Ret>
 Ready<Ret> EpollDriver::poll(O& op, RawTask task) {
   auto const [idx, direction] = op.interest();
-  DEBUG_ASSERT(io_dispatch_.contains(idx), "");
+  DEBUG_ASSERT(io_dispatch_.contains(idx), "idx {} not found in io_dispatch_", idx);
 
   auto& io = io_dispatch_[idx];
   bool is_ready = io.check_ready(direction, Waker(task));

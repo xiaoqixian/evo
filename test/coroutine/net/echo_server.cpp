@@ -20,8 +20,8 @@ task<> handler(net::TcpStream stream) {
   char buf[1024] {};
   int rb = co_await stream.read(buf, 1024);
   printf("Cli send: %s\n", buf);
-  const char* resp = "Server hello";
-  co_await stream.write(resp, std::strlen(resp));
+  constexpr const char* RESP = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: keep-alive\r\n\r\nHello, World!";
+  co_await stream.write(RESP, std::strlen(RESP));
   fmt::println("handler return");
 }
 

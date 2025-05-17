@@ -1,0 +1,48 @@
+// -*- C++ -*-
+// Date:   Sat May 17 11:47:02 AM 2025
+// Mail:   lunar_ubuntu@qq.com
+// Author: https://github.com/xiaoqixian
+
+#pragma once
+
+#include "evo/types"
+#include <utility>
+
+namespace evo {
+
+namespace {
+
+template <typename T>
+concept releasable = requires (T t) {
+  t.release();
+};
+
+}
+
+template <releasable T>
+class Rc {
+  size_t* counter_ {nullptr};
+
+public:
+  // always assert counter_ is valid
+  Rc(): counter_(new size_t(1)) {}
+
+  Rc(Rc const& other) noexcept: counter_(other.counter_) {
+    if (counter_) ++(*counter_);
+  }
+
+  Rc(Rc && other) noexcept: counter_(std::exchange(other.counter_, nullptr)) {}
+
+  void decrease_count() {
+    if (counter_ && --(*counter_) == 0) {
+      static_cast<T*>(this)->release();
+      delete counter_;
+    }
+  }
+
+  ~Rc() {
+    decrease_count();
+  }
+};
+
+} // namespace evo

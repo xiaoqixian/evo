@@ -12,13 +12,11 @@
 using namespace evo::coro;
 
 task<> handler(net::TcpStream stream) {
-  fmt::println("Accept a new client");
   char buf[1024];
-  const char* RESP = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: keep-alive\r\n\r\nHello, World!";
+  constexpr const char* RESP = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: keep-alive\r\n\r\nHello, World!";
   while (true) {
     int bytes = co_await stream.read(buf, 1024);
     if (bytes < 0) {
-      printf("read error\n");
       exit(1);
     }
     if (bytes == 0) break;
@@ -29,6 +27,7 @@ task<> handler(net::TcpStream stream) {
 
 task<> srv() {
   auto listener = net::TcpListener::bind(9090);
+  fmt::println("TcpListener created, listening on port 9090");
   
   while (true) {
     auto stream = co_await listener.accept();

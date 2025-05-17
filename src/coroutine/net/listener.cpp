@@ -15,7 +15,7 @@ namespace evo::coro::net {
 TcpListener TcpListener::bind(u16 port) {
   const int fd = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
   if (fd == -1) {
-    throw std::runtime_error(std::string(std::strerror(errno)));
+    throw std::runtime_error(std::strerror(errno));
   }
 
   ::sockaddr_in addr {};
@@ -24,12 +24,14 @@ TcpListener TcpListener::bind(u16 port) {
   addr.sin_port = ::htons(port);
   
   if (::bind(fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-    ERROR("Failed to bind port {}: {}", port, std::strerror(errno));
+    ERROR("Failed to bind on port {}: {}", port, std::strerror(errno));
   }
 
   if (::listen(fd, BACKLOG) < 0) {
     SYS_ERROR(listen);
   }
+
+  LOG_TRACE("TcpListener listen on socket fd {}", fd);
 
   return TcpListener {fd};
 }

@@ -38,6 +38,7 @@ public:
   {}
 
   ~Fd() {
+    LOG_TRACE("Fd {} destruct, counter = {}", raw_fd_, counter_ ? *counter_ : 0);
     if (counter_ && --(*counter_) == 0) {
       delete counter_;
       counter_ = nullptr;
@@ -47,7 +48,7 @@ public:
         driver.deregister_fd(this->raw_fd_);
       });
 
-      printf("close fd %d\n", raw_fd_);
+      LOG_TRACE("close fd {}", raw_fd_);
       if (::close(raw_fd_) == -1) {
         FATAL("");
       }

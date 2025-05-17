@@ -26,10 +26,13 @@ void EpollDriver::park(int timeout) {
     SYS_ERROR(epoll_wait);
   }
   for (int i = 0; i < res; i++) {
+    LOG_TRACE("epoll loop, fd = {}", events[i].data.fd);
     const int fd = events[i].data.fd;
     const u32 ev = events[i].events;
     auto& io = io_dispatch_[fd];
     
+    auto ready = Readiness::from_epoll_events(ev);
+    io.set_readiness([ready](auto curr) {return curr | ready;});
     io.wake(Readiness::from_epoll_events(ev));
   }
 }
@@ -44,6 +47,7 @@ void EpollDriver::register_fd(int fd) {
   ScheduledIO io;
   io.set_readiness([](Readiness) {return Readiness::READABLE | Readiness::WRITABLE;});
   io_dispatch_.emplace(fd, std::move(io));
+  LOG_TRACE("EpollDriver: register fd {}", fd);
 }
 
 void EpollDriver::deregister_fd(int fd) {

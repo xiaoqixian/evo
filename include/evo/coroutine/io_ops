@@ -93,7 +93,9 @@ public:
   }
 
   inline auto invoke() -> Ready<OpRet> {
-    return unix_errno_to_result(::accept4(fd_, nullptr, nullptr, O_CLOEXEC | O_NONBLOCK));
+    int res = ::accept4(fd_, nullptr, nullptr, O_CLOEXEC | O_NONBLOCK);
+    LOG_TRACE("accept4 res = {}", res);
+    return unix_errno_to_result(res);
   }
 };
 

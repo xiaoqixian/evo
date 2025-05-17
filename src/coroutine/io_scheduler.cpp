@@ -34,8 +34,6 @@ void ScheduledIO::set_waker(IODirection direction, Waker waker) {
 }
 
 void ScheduledIO::wake(Readiness readiness) {
-  fmt::println("readable: {}, has reader: {}", readiness.is_readable(), reader_.has_value());
-  fmt::println("writable: {}, has writer: {}", readiness.is_writable(), writer_.has_value());
   if (readiness.is_readable() && reader_.has_value()) {
     auto waker = std::move(reader_.value());
     reader_.reset();

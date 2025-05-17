@@ -16,7 +16,14 @@ class TcpStream {
   
 public:
   TcpStream(int raw_fd): fd_(raw_fd) {}
-  TcpStream(Fd fd): fd_(std::move(fd)) {}
+  TcpStream(Fd fd): fd_(std::move(fd)) {
+    LOG_TRACE("TcpStream Fd fd = {}", (int)fd);
+  }
+
+  TcpStream(TcpStream const&) = delete;
+  TcpStream(TcpStream && other) noexcept
+    : fd_(std::move(other.fd_))
+  {}
 
   task<int> read(char* buf, size_t size);
 

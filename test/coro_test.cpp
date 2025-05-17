@@ -8,6 +8,12 @@
 #include <stdio.h>
 #include <fmt/format.h>
 
+struct A {
+  ~A() {
+    puts("A is destructed");
+  }
+};
+
 template <int I, typename T>
 struct task {
   struct promise_type;
@@ -17,6 +23,7 @@ struct task {
 
   struct promise_type {
     T value_;
+    A a_;
 
     auto get_return_object() {
       printf("coro%d get_return_object\n", I);
@@ -32,7 +39,7 @@ struct task {
 
     auto final_suspend() noexcept {
       printf("coro%d final_suspend\n", I);
-      return std::suspend_always();
+      return std::suspend_never();
     }
 
     void return_value(T const& value) {
@@ -83,11 +90,15 @@ task<1, int> coro1() {
 }
 
 int main() {
-  auto c1 = coro1();
+  // auto c1 = coro1();
+  //
+  // while (!c1.handle.done()) {
+  //   printf("======= coro1 suspended\n");
+  //   c1.handle.resume();
+  // }
 
-  while (!c1.handle.done()) {
-    printf("======= coro1 suspended\n");
-    c1.handle.resume();
-  }
+  auto c2 = coro2();
+  c2.handle.resume();
+  puts("c2 resume done");
 }
 
