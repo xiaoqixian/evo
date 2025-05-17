@@ -22,23 +22,23 @@ struct EpollDriverTag {};
 
 template <typename R>
 class JoinHandle {
-  using handle_t = task<R>::handle_t;
-  handle_t handle_;
+  using task_t = task<R>;
+  task_t task_;
 
 public:
-  JoinHandle(handle_t handle) noexcept: handle_(handle) {}
+  JoinHandle(task_t task) noexcept: task_(std::move(task)) {}
 
   bool await_ready() {
-    return handle_.done();
+    return task_.handle().done();
   }
 
   void await_suspend(std::coroutine_handle<> cont) {
-    handle_.promise().set_continuation(cont);
+    task_.handle().promise().set_continuation(cont);
   }
 
   R await_resume() noexcept {
     if constexpr (!std::is_void_v<R>) {
-      return std::move(handle_.promise().result());
+      return std::move(task_.handle().promise().take_result());
     }
   }
 };
@@ -56,12 +56,16 @@ public:
   static void resume_handle(void* data) {
     auto handle = std::coroutine_handle<>::from_address(data);
     if (!handle.done()) handle.resume();
+    else {
+      LOG_TRACE("try resume a finished coroutine");
+    }
   }
 
   template <typename R>
   JoinHandle<R> spawn(task<R> task) {
-    auto join_handle = JoinHandle<R>(task.handle());
-    GLOBAL_CONTEXT.ref().push(RawTask(task.handle().address(), &resume_handle));
+    auto handle = task.handle();
+    auto join_handle = JoinHandle<R>(std::move(task));
+    GLOBAL_CONTEXT.ref().push(RawTask(handle.address(), &resume_handle));
     return join_handle;
   }
 };
