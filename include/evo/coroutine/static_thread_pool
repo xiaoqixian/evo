@@ -14,7 +14,7 @@
 #include <queue>
 #include <thread>
 
-namespace evo {
+namespace evo::coro {
 
 class static_thread_pool {
   typedef std::coroutine_handle<> handle_t;
@@ -44,7 +44,7 @@ public:
   }
 
   template <typename F, typename... Args>
-  evo::task<std::invoke_result_t<F, Args...>>
+  task<std::invoke_result_t<F, Args...>>
   schedule(F&& f, Args&&... args) {
     // co_await to make the coroutine resumed 
     // on another thread which belongs to the 

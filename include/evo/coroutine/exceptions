@@ -7,6 +7,7 @@
 
 #include "evo/result"
 #include <cstring>
+#include <type_traits>
 namespace evo::coro {
 
 template <typename T>
@@ -18,6 +19,12 @@ public:
     } else {
       return std::move(*this).unchecked_unwrap();
     }
+  }
+
+  inline int unwrap_anyway() 
+    requires std::is_same_v<T, int>
+  {
+    return this->is_ok() ? this->unchecked_unwrap() : this->unchecked_unwrap_err();
   }
 };
 

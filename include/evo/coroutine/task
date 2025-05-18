@@ -19,13 +19,7 @@ class task;
 namespace task_impl {
 
 template <typename Ret>
-struct task_promise;
-
-template <typename Ret>
-using task_promise_base = promise_base<Ret>;
-
-template <typename Ret>
-struct task_promise: task_promise_base<Ret> {
+struct task_promise: promise_base<Ret> {
   std::coroutine_handle<> continuation_;
   size_t ref_;
 

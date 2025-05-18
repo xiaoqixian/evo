@@ -13,12 +13,12 @@ namespace evo::coro::net {
 
 task<int> TcpStream::read(char* buf, size_t size) {
   auto res = co_await Op::read(fd_, buf, size);
-  co_return res.unwrap_or_throw();
+  co_return res.unwrap_anyway();
 }
 
 task<int> TcpStream::write(char const* buf, size_t size) {
   auto res = co_await Op::write(fd_, buf, size);
-  co_return res.unwrap_or_throw();
+  co_return res.unwrap_anyway();
 }
 
 task<TcpStream> TcpStream::connect(const char* addr, u16 port) {
